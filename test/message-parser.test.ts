@@ -62,6 +62,19 @@ describe("parseInboundEmail", () => {
     expect(result.attachments[0].name).toBe("doc.pdf");
   });
 
+  it("copies attachments to raw with camelCase contentType", () => {
+    const email: ResendReceivedEmail = {
+      ...baseEmail,
+      attachments: [
+        { filename: "photo.png", content_type: "image/png", id: "att-1" },
+      ],
+    };
+    const result = parseInboundEmail(email, "thread1", FROM_ADDRESS);
+    expect(result.raw.attachments).toHaveLength(1);
+    expect(result.raw.attachments?.[0].filename).toBe("photo.png");
+    expect(result.raw.attachments?.[0].contentType).toBe("image/png");
+  });
+
   it("uses text body, falls back to stripped html", () => {
     const htmlOnly: ResendReceivedEmail = {
       ...baseEmail,

@@ -91,6 +91,12 @@ export class ResendAdapter {
       result.event.data.email_id
     );
 
+    // Webhook payload is the authoritative source for attachments —
+    // the fetched email may not include them.
+    if (result.event.data.attachments?.length && !email.attachments?.length) {
+      email.attachments = result.event.data.attachments;
+    }
+
     const senderAddress = parseEmailAddress(email.from);
     const threadId = await this.threadResolver.resolveThreadId({
       toAddress: senderAddress,

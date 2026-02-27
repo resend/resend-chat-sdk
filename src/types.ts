@@ -65,8 +65,11 @@ export interface ResendWebhookPayload {
     subject: string;
     message_id: string;
     attachments?: Array<{
-      filename: string;
+      content_disposition?: string;
+      content_id?: string;
       content_type: string;
+      filename: string;
+      id?: string;
     }>;
   };
   type: "email.received";
@@ -74,8 +77,11 @@ export interface ResendWebhookPayload {
 
 export interface ResendReceivedEmail {
   attachments?: Array<{
-    filename: string;
+    content_disposition?: string;
+    content_id?: string;
     content_type: string;
+    filename: string;
+    id?: string;
   }>;
   cc?: string[];
   created_at: string;

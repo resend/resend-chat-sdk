@@ -24,6 +24,10 @@ export function parseInboundEmail(
     html: email.html,
     headers: email.headers,
     createdAt: email.created_at,
+    attachments: (email.attachments || []).map((a) => ({
+      filename: a.filename,
+      contentType: a.content_type,
+    })),
   };
 
   return new Message<ResendRawMessage>({
