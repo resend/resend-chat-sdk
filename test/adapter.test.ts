@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendAdapter } from "../src/adapter.js";
+import { createResendAdapter } from "../src/index.js";
 import type { ResendAdapterConfig } from "../src/types.js";
 
 // Mock Resend SDK
@@ -125,6 +126,99 @@ describe("ResendAdapter", () => {
         expect.objectContaining({ subject: "Re: Original Subject" })
       );
     });
+
+    it("sends email with markdown message", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        markdown: "**bold**",
+      });
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: expect.stringContaining("bold"),
+        })
+      );
+    });
+
+    it("sends email with raw message", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        raw: "raw text",
+      });
+      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["user@example.com"],
+        })
+      );
+    });
+
+    it("sends email with ast message", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      const astRoot = {
+        type: "root" as const,
+        children: [
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, value: "ast content" }],
+          },
+        ],
+      };
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        ast: astRoot,
+      });
+      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["user@example.com"],
+        })
+      );
+    });
+
+    it("sends email with card message", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        card: {
+          type: "Card",
+          children: [
+            {
+              type: "CardHeader",
+              children: [{ type: "text", value: "Hi" }],
+            },
+          ],
+        },
+      });
+      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["user@example.com"],
+        })
+      );
+    });
+
+    it("throws when Resend API returns an error", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      mockSend.mockResolvedValueOnce({
+        data: null,
+        error: { message: "Rate limited" },
+      });
+
+      await expect(
+        adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+          text: "Hello",
+        })
+      ).rejects.toThrow("Rate limited");
+    });
   });
 
   describe("unsupported operations", () => {
@@ -214,6 +308,14 @@ describe("ResendAdapter", () => {
       expect(parsed.id).toBe("re_123");
       expect(parsed.text).toBe("Hello");
       expect(parsed.author.userId).toBe("user@example.com");
+    });
+  });
+
+  describe("createResendAdapter", () => {
+    it("returns a ResendAdapter instance with correct name", () => {
+      const instance = createResendAdapter({ fromAddress: "bot@example.com" });
+      expect(instance).toBeInstanceOf(ResendAdapter);
+      expect(instance.name).toBe("resend");
     });
   });
 

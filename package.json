@@ -2,17 +2,40 @@
   "name": "@chat-adapter/resend",
   "version": "0.1.0",
   "description": "Vercel Chat SDK adapter for Resend email",
+  "author": "João Melo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/resend/resend-chat-sdk.git"
+  },
+  "homepage": "https://github.com/resend/resend-chat-sdk",
+  "bugs": {
+    "url": "https://github.com/resend/resend-chat-sdk/issues"
+  },
+  "keywords": [
+    "resend",
+    "email",
+    "chat",
+    "adapter",
+    "vercel",
+    "chat-sdk",
+    "webhook"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -21,8 +44,8 @@
     "format": "biome format --write ."
   },
   "peerDependencies": {
-    "@chat-adapter/shared": "4.15.0",
-    "chat": "4.15.0"
+    "@chat-adapter/shared": "^4.15.0",
+    "chat": "^4.15.0"
   },
   "dependencies": {
     "@react-email/components": "1.0.8",
@@ -44,6 +67,5 @@
   },
   "files": [
     "dist"
-  ],
-  "license": "MIT"
+  ]
 }
