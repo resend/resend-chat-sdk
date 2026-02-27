@@ -45,20 +45,27 @@ export class ResendAdapter {
     this.userName = config.fromAddress;
   }
 
-  async initialize(chat: ChatInstance): Promise<void> {
-    const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var."
-      );
+  /** Lazily create the Resend client so both initialize() and direct usage work. */
+  private getResend(): Resend {
+    if (!this.resend) {
+      const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var."
+        );
+      }
+      this.resend = new Resend(apiKey);
     }
+    return this.resend;
+  }
 
-    this.resend = new Resend(apiKey);
+  async initialize(chat: ChatInstance): Promise<void> {
+    this.getResend();
     this.chat = chat;
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
-    this.webhookHandler = new WebhookHandler(this.resend, webhookSecret);
+    this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
   }
 
   encodeThreadId(id: ResendThreadId): string {
@@ -117,9 +124,7 @@ export class ResendAdapter {
     threadId: string,
     message: AdapterPostableMessage
   ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
-    if (!this.resend) {
-      throw new Error("Adapter not initialized. Call initialize() first.");
-    }
+    const resend = this.getResend();
 
     // Normalize AdapterPostableMessage to { text?, formatted?, card? }
     let normalized: { text?: string; formatted?: Root; card?: any };
@@ -153,7 +158,7 @@ export class ResendAdapter {
     const storedSubject = this.threadResolver.getSubject(threadId);
     const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
 
-    const response = await this.resend.emails.send({
+    const response = await resend.emails.send({
       from: fromHeader,
       to: [decoded.toAddress],
       subject,
