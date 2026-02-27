@@ -65,13 +65,13 @@ chat.onSubscribedMessage(async (thread, message) => {
 
   const text = message.text.toLowerCase();
 
-  if (text.includes("status")) {
+  if (text.includes("close")) {
+    await thread.post("Ticket closed. Thanks for contacting support!");
+    await thread.unsubscribe();
+  } else if (text.includes("status")) {
     await thread.post(
       "Your ticket is being reviewed by our team. Current status: In Progress"
     );
-  } else if (text.includes("close")) {
-    await thread.post("Ticket closed. Thanks for contacting support!");
-    await thread.unsubscribe();
   } else {
     await thread.post(
       "Got your message. A support agent will respond shortly."
