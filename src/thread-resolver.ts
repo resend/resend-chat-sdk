@@ -34,9 +34,9 @@ export class ThreadResolver {
     const { toAddress, messageId, inReplyTo, references } = input;
 
     if (inReplyTo || references) {
-      const rootMessageId = this.findRootMessageId(inReplyTo, references);
-      if (rootMessageId) {
-        const existingThread = this.messageToThread.get(rootMessageId);
+      const candidateIds = this.extractMessageIds(inReplyTo, references);
+      for (const candidate of candidateIds) {
+        const existingThread = this.messageToThread.get(candidate);
         if (existingThread) {
           this.trackMessage(existingThread, messageId);
           return existingThread;
@@ -93,16 +93,41 @@ export class ThreadResolver {
     return this.threadSubjects.get(threadId);
   }
 
-  private findRootMessageId(
+  /**
+   * Extract all candidate message IDs from In-Reply-To and References headers.
+   * Handles both RFC 2822 whitespace-separated format and Resend's
+   * JSON-encoded array format (e.g. `["<id1>","<id2>"]`).
+   */
+  private extractMessageIds(
     inReplyTo: string | undefined,
     references: string | undefined
-  ): string | undefined {
+  ): string[] {
+    const ids: string[] = [];
+
     if (references) {
-      const refs = references.trim().split(WHITESPACE_RE);
-      if (refs.length > 0) {
-        return refs[0];
+      const trimmed = references.trim();
+      if (trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            ids.push(...parsed.map((s: string) => s.trim()).filter(Boolean));
+          }
+        } catch {
+          // Fall back to whitespace splitting if JSON parse fails
+          ids.push(...trimmed.split(WHITESPACE_RE).filter(Boolean));
+        }
+      } else {
+        ids.push(...trimmed.split(WHITESPACE_RE).filter(Boolean));
       }
     }
-    return inReplyTo;
+
+    if (inReplyTo) {
+      const trimmed = inReplyTo.trim();
+      if (trimmed && !ids.includes(trimmed)) {
+        ids.push(trimmed);
+      }
+    }
+
+    return ids;
   }
 }

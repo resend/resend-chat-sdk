@@ -83,6 +83,82 @@ describe("ThreadResolver", () => {
 
       expect(deep).toBe(root);
     });
+
+    it("resolves thread from JSON-encoded references array (Resend format)", async () => {
+      const resolver = new ThreadResolver();
+      const root = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<root@mail.resend.dev>",
+        inReplyTo: undefined,
+        references: undefined,
+      });
+
+      const reply = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<reply@mail.resend.dev>",
+        inReplyTo: "<ses-assigned@amazonses.com>",
+        references: '["<root@mail.resend.dev>","<ses-assigned@amazonses.com>"]',
+      });
+
+      expect(reply).toBe(root);
+    });
+
+    it("resolves thread when only in-reply-to matches (SES-assigned ID in references)", async () => {
+      const resolver = new ThreadResolver();
+      const root = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<root@mail.resend.dev>",
+        inReplyTo: undefined,
+        references: undefined,
+      });
+
+      // Bot replies, tracking both our messageId and the SES-assigned one
+      resolver.trackMessage(root, "<ses-reply@amazonses.com>");
+
+      const userReply = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<user-reply@mail.resend.dev>",
+        inReplyTo: "<ses-reply@amazonses.com>",
+        references: '["<root@mail.resend.dev>"]',
+      });
+
+      expect(userReply).toBe(root);
+    });
+
+    it("creates new thread when JSON-encoded references contain no tracked IDs", async () => {
+      const resolver = new ThreadResolver();
+      const threadId = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<orphan@mail.resend.dev>",
+        inReplyTo: "<unknown@amazonses.com>",
+        references:
+          '["<unknown1@mail.resend.dev>","<unknown2@mail.resend.dev>"]',
+      });
+
+      expect(threadId).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
+    });
+
+    it("handles malformed JSON references by falling back to whitespace split", async () => {
+      const resolver = new ThreadResolver();
+      const root = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<root@mail.resend.dev>",
+        inReplyTo: undefined,
+        references: undefined,
+      });
+
+      const reply = await resolver.resolveThreadId({
+        toAddress: "bot@example.com",
+        messageId: "<reply@mail.resend.dev>",
+        inReplyTo: undefined,
+        references: "[invalid json <root@mail.resend.dev>",
+      });
+
+      // Falls back to whitespace split, finds "<root@mail.resend.dev>" won't match
+      // because "[invalid" and "json" are also tokens — but root IS in the list
+      // Actually the split produces: ["[invalid", "json", "<root@mail.resend.dev>"]
+      expect(reply).toBe(root);
+    });
   });
 
   describe("getReplyHeaders", () => {
