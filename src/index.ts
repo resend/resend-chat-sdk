@@ -8,3 +8,5 @@ export type {
   ResendWebhookPayload,
   ResendReceivedEmail,
 } from "./types.js";
+
+export { hashMessageId, parseEmailAddress, generateMessageId } from "./utils.js";
