@@ -105,11 +105,18 @@ export class ResendAdapter {
     }
 
     const senderAddress = parseEmailAddress(email.from);
+
+    // Normalize header keys to handle Resend's varying casing
+    const headers = email.headers || {};
+    const inReplyTo =
+      headers["In-Reply-To"] || headers["in-reply-to"] || undefined;
+    const references = headers.References || headers.references || undefined;
+
     const threadId = await this.threadResolver.resolveThreadId({
       toAddress: senderAddress,
       messageId: email.message_id,
-      inReplyTo: email.headers?.["In-Reply-To"],
-      references: email.headers?.References,
+      inReplyTo,
+      references,
     });
 
     this.threadResolver.trackSubject(threadId, email.subject);
