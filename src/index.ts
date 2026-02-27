@@ -22,3 +22,5 @@ export { renderMessage } from "./message-renderer.js";
 export { parseInboundEmail } from "./message-parser.js";
 
 export { WebhookHandler } from "./webhook-handler.js";
+
+export { ResendAdapter } from "./adapter.js";
