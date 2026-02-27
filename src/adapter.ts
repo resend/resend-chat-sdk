@@ -16,6 +16,10 @@ import type {
   ResendRawMessage,
 } from "./types.js";
 
+export interface ChatInstance {
+  processMessage(adapter: any, threadId: string, message: any): void;
+}
+
 class NotImplementedError extends Error {
   constructor(method: string) {
     super(`${method} is not supported by the Resend adapter`);
@@ -29,7 +33,7 @@ export class ResendAdapter {
 
   private config: ResendAdapterConfig;
   private resend: Resend | null = null;
-  private chat: any = null;
+  private chat: ChatInstance | null = null;
   private threadResolver = new ThreadResolver();
   private formatConverter = new ResendFormatConverter();
   private webhookHandler: WebhookHandler | null = null;
@@ -39,7 +43,7 @@ export class ResendAdapter {
     this.userName = config.fromAddress;
   }
 
-  async initialize(chat: any): Promise<void> {
+  async initialize(chat: ChatInstance): Promise<void> {
     const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
     if (!apiKey) {
       throw new Error(
@@ -68,6 +72,14 @@ export class ResendAdapter {
       throw new Error("Adapter not initialized. Call initialize() first.");
     }
 
+    const webhookSecret =
+      this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      throw new Error(
+        "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env)",
+      );
+    }
+
     const result = await this.webhookHandler.parseWebhookRequest(request);
     if (!result.event) {
       return { status: result.status };
@@ -84,8 +96,10 @@ export class ResendAdapter {
       references: email.headers?.["References"],
     });
 
+    this.threadResolver.trackSubject(threadId, email.subject);
+
     const parsed = parseInboundEmail(email, threadId);
-    await this.chat.processMessage(parsed);
+    await this.chat.processMessage(this, threadId, parsed);
 
     return { status: 200 };
   }
@@ -93,6 +107,7 @@ export class ResendAdapter {
   async postMessage(
     threadId: string,
     message: { text?: string; formatted?: Root; card?: any },
+    options?: { subject?: string },
   ): Promise<{ id: string; threadId: string }> {
     if (!this.resend) {
       throw new Error("Adapter not initialized. Call initialize() first.");
@@ -106,15 +121,22 @@ export class ResendAdapter {
       : this.config.fromAddress;
 
     const messageId = generateMessageId(this.config.fromAddress);
-    const headers = this.threadResolver.getReplyHeaders(threadId, messageId);
+    const headers = this.threadResolver.getReplyHeaders(threadId);
+
+    const storedSubject = this.threadResolver.getSubject(threadId);
+    const subject = options?.subject
+      ? options.subject
+      : storedSubject
+        ? `Re: ${storedSubject}`
+        : "New message";
 
     const response = await this.resend.emails.send({
       from: fromHeader,
       to: [decoded.toAddress],
-      subject: `Re: Thread ${decoded.rootMessageIdHash}`,
+      subject,
       html: rendered.html,
       text: rendered.text,
-      headers,
+      ...(headers && { headers }),
     });
 
     if (response.error || !response.data) {

@@ -3,18 +3,22 @@ import { ResendAdapter } from "../src/adapter.js";
 import type { ResendAdapterConfig } from "../src/types.js";
 
 // Mock Resend SDK
+const mockSend = vi.fn().mockResolvedValue({
+  data: { id: "re_sent_123" },
+});
+const mockReceivingGet = vi.fn();
+const mockVerify = vi.fn();
+
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(() => ({
     emails: {
-      send: vi.fn().mockResolvedValue({
-        data: { id: "re_sent_123" },
-      }),
+      send: mockSend,
       receiving: {
-        get: vi.fn(),
+        get: mockReceivingGet,
       },
     },
     webhooks: {
-      verify: vi.fn(),
+      verify: mockVerify,
     },
   })),
 }));
@@ -30,6 +34,8 @@ describe("ResendAdapter", () => {
   let adapter: ResendAdapter;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    mockSend.mockResolvedValue({ data: { id: "re_sent_123" } });
     adapter = new ResendAdapter(config);
   });
 
@@ -46,7 +52,7 @@ describe("ResendAdapter", () => {
   describe("initialize", () => {
     it("stores chat instance reference", async () => {
       const mockChat = { processMessage: vi.fn() };
-      await adapter.initialize(mockChat as any);
+      await adapter.initialize(mockChat);
     });
 
     it("throws without API key", async () => {
@@ -56,7 +62,7 @@ describe("ResendAdapter", () => {
       });
       const env = process.env.RESEND_API_KEY;
       delete process.env.RESEND_API_KEY;
-      await expect(noKeyAdapter.initialize({} as any)).rejects.toThrow();
+      await expect(noKeyAdapter.initialize({ processMessage: vi.fn() })).rejects.toThrow();
       if (env) process.env.RESEND_API_KEY = env;
     });
   });
@@ -76,7 +82,7 @@ describe("ResendAdapter", () => {
   describe("postMessage", () => {
     it("sends email via Resend", async () => {
       const mockChat = { processMessage: vi.fn() };
-      await adapter.initialize(mockChat as any);
+      await adapter.initialize(mockChat);
 
       const result = await adapter.postMessage(
         "resend:user@example.com:abcdef0123456789",
@@ -84,6 +90,33 @@ describe("ResendAdapter", () => {
       );
       expect(result.id).toBe("re_sent_123");
       expect(result.threadId).toBe("resend:user@example.com:abcdef0123456789");
+    });
+
+    it("uses 'New message' subject when no subject stored", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        { text: "Hello" },
+      );
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: "New message" }),
+      );
+    });
+
+    it("accepts optional subject for new threads", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        { text: "Hello" },
+        { subject: "Custom Subject" },
+      );
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: "Custom Subject" }),
+      );
     });
   });
 
@@ -171,6 +204,92 @@ describe("ResendAdapter", () => {
       expect(parsed.id).toBe("re_123");
       expect(parsed.text).toBe("Hello");
       expect(parsed.author.id).toBe("user@example.com");
+    });
+  });
+
+  describe("handleWebhook", () => {
+    it("throws when webhook secret is missing", async () => {
+      const noSecretAdapter = new ResendAdapter({
+        ...config,
+        webhookSecret: undefined,
+      });
+      const env = process.env.RESEND_WEBHOOK_SECRET;
+      delete process.env.RESEND_WEBHOOK_SECRET;
+
+      const mockChat = { processMessage: vi.fn() };
+      await noSecretAdapter.initialize(mockChat);
+
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: {
+          "svix-id": "msg_123",
+          "svix-timestamp": "12345",
+          "svix-signature": "v1,valid",
+        },
+        body: JSON.stringify({ type: "email.received", data: {} }),
+      });
+
+      await expect(noSecretAdapter.handleWebhook(request)).rejects.toThrow(
+        "Webhook secret is required",
+      );
+
+      if (env) process.env.RESEND_WEBHOOK_SECRET = env;
+    });
+
+    it("processes webhook and calls chat.processMessage with correct args", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      const webhookPayload = {
+        type: "email.received",
+        created_at: "2025-01-15T10:30:00Z",
+        data: {
+          email_id: "re_webhook_123",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Test webhook email",
+          message_id: "<webhook-msg-1@mail.resend.dev>",
+        },
+      };
+
+      const fullEmail = {
+        id: "re_webhook_123",
+        from: "sender@example.com",
+        to: ["bot@example.com"],
+        subject: "Test webhook email",
+        message_id: "<webhook-msg-1@mail.resend.dev>",
+        text: "Hello from webhook!",
+        html: "<p>Hello from webhook!</p>",
+        headers: {},
+        created_at: "2025-01-15T10:30:00Z",
+      };
+
+      mockVerify.mockReturnValue(webhookPayload);
+      mockReceivingGet.mockResolvedValue({ data: fullEmail });
+
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: {
+          "svix-id": "msg_123",
+          "svix-timestamp": "12345",
+          "svix-signature": "v1,valid",
+        },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      const result = await adapter.handleWebhook(request);
+      expect(result.status).toBe(200);
+
+      expect(mockChat.processMessage).toHaveBeenCalledOnce();
+      const [adapterArg, threadIdArg, messageArg] =
+        mockChat.processMessage.mock.calls[0];
+
+      expect(adapterArg).toBe(adapter);
+      expect(threadIdArg).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
+      expect(messageArg.id).toBe("re_webhook_123");
+      expect(messageArg.text).toBe("Hello from webhook!");
+      expect(messageArg.author.id).toBe("sender@example.com");
+      expect(messageArg.metadata.subject).toBe("Test webhook email");
     });
   });
 });

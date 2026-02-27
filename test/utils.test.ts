@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hashMessageId, parseEmailAddress, generateMessageId } from "../src/utils.js";
+import { hashMessageId, parseEmailAddress, generateMessageId, stripHtml } from "../src/utils.js";
 
 describe("hashMessageId", () => {
   it("returns 16-char hex string", async () => {
@@ -48,5 +48,23 @@ describe("generateMessageId", () => {
     const a = generateMessageId("bot@example.com");
     const b = generateMessageId("bot@example.com");
     expect(a).not.toBe(b);
+  });
+});
+
+describe("stripHtml", () => {
+  it("removes HTML tags", () => {
+    expect(stripHtml("<p>Hello</p>")).toBe("Hello");
+  });
+
+  it("handles nested tags", () => {
+    expect(stripHtml("<div><strong>Bold</strong> text</div>")).toBe("Bold text");
+  });
+
+  it("trims whitespace", () => {
+    expect(stripHtml("  <p>Hello</p>  ")).toBe("Hello");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(stripHtml("")).toBe("");
   });
 });

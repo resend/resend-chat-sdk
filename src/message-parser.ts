@@ -1,4 +1,4 @@
-import { parseEmailAddress } from "./utils.js";
+import { parseEmailAddress, stripHtml } from "./utils.js";
 import { ResendFormatConverter } from "./format-converter.js";
 import type { ResendReceivedEmail, ResendRawMessage } from "./types.js";
 
@@ -77,8 +77,4 @@ function extractDisplayName(from: string): string {
   const match = from.match(/^([^<]+)<[^>]+>$/);
   if (match) return match[1].trim();
   return from;
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, "").trim();
 }

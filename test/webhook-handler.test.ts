@@ -105,5 +105,24 @@ describe("WebhookHandler", () => {
       expect(result).toEqual(email);
       expect(mockReceivingGet).toHaveBeenCalledWith("re_123");
     });
+
+    it("throws on null data response", async () => {
+      mockReceivingGet.mockResolvedValue({
+        data: null,
+        error: { message: "Email not found" },
+      });
+
+      await expect(handler.fetchEmailContent("re_missing")).rejects.toThrow(
+        "Failed to fetch email content: Email not found",
+      );
+    });
+
+    it("throws on error without message", async () => {
+      mockReceivingGet.mockResolvedValue({ data: null, error: {} });
+
+      await expect(handler.fetchEmailContent("re_missing")).rejects.toThrow(
+        "Failed to fetch email content: Unknown error",
+      );
+    });
   });
 });

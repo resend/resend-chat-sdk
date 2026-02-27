@@ -45,6 +45,11 @@ export class WebhookHandler {
 
   async fetchEmailContent(emailId: string): Promise<ResendReceivedEmail> {
     const response = await this.resend.emails.receiving.get(emailId);
+    if (response.error || !response.data) {
+      throw new Error(
+        `Failed to fetch email content: ${response.error?.message || "Unknown error"}`,
+      );
+    }
     return response.data as unknown as ResendReceivedEmail;
   }
 }

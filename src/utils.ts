@@ -17,3 +17,7 @@ export function generateMessageId(fromAddress: string): string {
   const unique = randomUUID();
   return `<${unique}@${domain}>`;
 }
+
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, "").trim();
+}

@@ -85,9 +85,50 @@ describe("ThreadResolver", () => {
     it("returns In-Reply-To and References for a thread", () => {
       const resolver = new ThreadResolver();
       resolver.trackMessage("resend:bot@example.com:abc123", "<msg@test.com>");
-      const headers = resolver.getReplyHeaders("resend:bot@example.com:abc123", "<msg@test.com>");
-      expect(headers["In-Reply-To"]).toBe("<msg@test.com>");
-      expect(headers["References"]).toContain("<msg@test.com>");
+      const headers = resolver.getReplyHeaders("resend:bot@example.com:abc123");
+      expect(headers).toBeDefined();
+      expect(headers!["In-Reply-To"]).toBe("<msg@test.com>");
+      expect(headers!["References"]).toContain("<msg@test.com>");
+    });
+
+    it("returns undefined when no messages tracked", () => {
+      const resolver = new ThreadResolver();
+      const headers = resolver.getReplyHeaders("resend:bot@example.com:unknown");
+      expect(headers).toBeUndefined();
+    });
+  });
+
+  describe("getLastMessageId", () => {
+    it("returns last tracked message ID", () => {
+      const resolver = new ThreadResolver();
+      resolver.trackMessage("resend:bot@example.com:abc123", "<msg1@test.com>");
+      resolver.trackMessage("resend:bot@example.com:abc123", "<msg2@test.com>");
+      expect(resolver.getLastMessageId("resend:bot@example.com:abc123")).toBe("<msg2@test.com>");
+    });
+
+    it("returns undefined for unknown thread", () => {
+      const resolver = new ThreadResolver();
+      expect(resolver.getLastMessageId("resend:bot@example.com:unknown")).toBeUndefined();
+    });
+  });
+
+  describe("subject tracking", () => {
+    it("stores and retrieves subject for thread", () => {
+      const resolver = new ThreadResolver();
+      resolver.trackSubject("resend:bot@example.com:abc123", "Hello World");
+      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe("Hello World");
+    });
+
+    it("keeps first subject, ignores subsequent", () => {
+      const resolver = new ThreadResolver();
+      resolver.trackSubject("resend:bot@example.com:abc123", "First Subject");
+      resolver.trackSubject("resend:bot@example.com:abc123", "Second Subject");
+      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe("First Subject");
+    });
+
+    it("returns undefined for unknown thread", () => {
+      const resolver = new ThreadResolver();
+      expect(resolver.getSubject("resend:bot@example.com:unknown")).toBeUndefined();
     });
   });
 });

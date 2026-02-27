@@ -1,15 +1,13 @@
 import { ResendFormatConverter } from "./format-converter.js";
 import { renderCard } from "./card-renderer.js";
+import type { CardNode } from "./card-renderer.js";
+import { stripHtml } from "./utils.js";
 import type { Root } from "mdast";
 
 interface RenderInput {
   text?: string;
   formatted?: Root;
-  card?: {
-    type: string;
-    props?: Record<string, unknown>;
-    children?: unknown[];
-  };
+  card?: CardNode;
 }
 
 interface RenderOutput {
@@ -21,7 +19,7 @@ const converter = new ResendFormatConverter();
 
 export async function renderMessage(input: RenderInput): Promise<RenderOutput> {
   if (input.card) {
-    const html = await renderCard(input.card as Parameters<typeof renderCard>[0]);
+    const html = await renderCard(input.card);
     const text = extractTextFromCard(input.card) || input.text || "";
     return { html, text };
   }
@@ -37,11 +35,12 @@ export async function renderMessage(input: RenderInput): Promise<RenderOutput> {
   return { html, text };
 }
 
-function extractTextFromCard(card: Record<string, unknown>): string {
+function extractTextFromCard(card: CardNode): string {
   const parts: string[] = [];
-  const children = card.children as Array<Record<string, unknown>> | undefined;
-  if (!children) return "";
-  for (const child of children) {
+  if (!card.children || typeof card.children === "string") {
+    return typeof card.children === "string" ? card.children : "";
+  }
+  for (const child of card.children) {
     if (typeof child.children === "string") {
       parts.push(child.children);
     } else if (Array.isArray(child.children)) {
@@ -49,10 +48,6 @@ function extractTextFromCard(card: Record<string, unknown>): string {
     }
   }
   return parts.join("\n");
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, "").trim();
 }
 
 function escapeHtml(text: string): string {

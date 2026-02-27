@@ -9,13 +9,14 @@ export type {
   ResendReceivedEmail,
 } from "./types.js";
 
-export { hashMessageId, parseEmailAddress, generateMessageId } from "./utils.js";
+export { hashMessageId, parseEmailAddress, generateMessageId, stripHtml } from "./utils.js";
 
 export { ThreadResolver } from "./thread-resolver.js";
 
 export { ResendFormatConverter } from "./format-converter.js";
 
 export { renderCard } from "./card-renderer.js";
+export type { CardNode } from "./card-renderer.js";
 
 export { renderMessage } from "./message-renderer.js";
 
@@ -24,6 +25,7 @@ export { parseInboundEmail } from "./message-parser.js";
 export { WebhookHandler } from "./webhook-handler.js";
 
 export { ResendAdapter } from "./adapter.js";
+export type { ChatInstance } from "./adapter.js";
 
 import { ResendAdapter } from "./adapter.js";
 import type { ResendAdapterConfig } from "./types.js";

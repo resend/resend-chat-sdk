@@ -13,7 +13,7 @@ import {
 } from "@react-email/components";
 import React from "react";
 
-interface CardNode {
+export interface CardNode {
   type: string;
   props?: Record<string, unknown>;
   children?: CardNode[] | string | null;

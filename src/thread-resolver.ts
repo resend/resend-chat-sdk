@@ -11,6 +11,7 @@ interface ResolveInput {
 export class ThreadResolver {
   private messageToThread = new Map<string, string>();
   private threadMessages = new Map<string, string[]>();
+  private threadSubjects = new Map<string, string>();
 
   encodeThreadId(id: ResendThreadId): string {
     return `resend:${id.toAddress}:${id.rootMessageIdHash}`;
@@ -56,12 +57,31 @@ export class ThreadResolver {
     this.threadMessages.set(threadId, messages);
   }
 
-  getReplyHeaders(threadId: string, lastMessageId: string): Record<string, string> {
+  getLastMessageId(threadId: string): string | undefined {
+    const messages = this.threadMessages.get(threadId);
+    if (!messages || messages.length === 0) return undefined;
+    return messages[messages.length - 1];
+  }
+
+  getReplyHeaders(threadId: string): Record<string, string> | undefined {
+    const lastMessageId = this.getLastMessageId(threadId);
+    if (!lastMessageId) return undefined;
+
     const messages = this.threadMessages.get(threadId) || [];
     return {
       "In-Reply-To": lastMessageId,
       References: messages.join(" "),
     };
+  }
+
+  trackSubject(threadId: string, subject: string): void {
+    if (!this.threadSubjects.has(threadId)) {
+      this.threadSubjects.set(threadId, subject);
+    }
+  }
+
+  getSubject(threadId: string): string | undefined {
+    return this.threadSubjects.get(threadId);
   }
 
   private findRootMessageId(inReplyTo: string | undefined, references: string | undefined): string | undefined {
