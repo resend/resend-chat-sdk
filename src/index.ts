@@ -16,3 +16,5 @@ export { ThreadResolver } from "./thread-resolver.js";
 export { ResendFormatConverter } from "./format-converter.js";
 
 export { renderCard } from "./card-renderer.js";
+
+export { renderMessage } from "./message-renderer.js";
