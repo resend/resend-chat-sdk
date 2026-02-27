@@ -12,3 +12,5 @@ export type {
 export { hashMessageId, parseEmailAddress, generateMessageId } from "./utils.js";
 
 export { ThreadResolver } from "./thread-resolver.js";
+
+export { ResendFormatConverter } from "./format-converter.js";

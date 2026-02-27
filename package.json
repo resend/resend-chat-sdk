@@ -18,21 +18,25 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "chat": "4.15.0",
-    "@chat-adapter/shared": "4.15.0"
+    "@chat-adapter/shared": "4.15.0",
+    "chat": "4.15.0"
   },
   "dependencies": {
-    "resend": "6.9.2",
     "@react-email/components": "1.0.8",
-    "@react-email/render": "2.0.4"
+    "@react-email/render": "2.0.4",
+    "hast-util-to-html": "^9.0.5",
+    "mdast-util-to-hast": "^13.2.1",
+    "resend": "6.9.2"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
+    "@chat-adapter/shared": "4.15.0",
     "@types/node": "^22.0.0",
     "chat": "4.15.0",
-    "@chat-adapter/shared": "4.15.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "license": "MIT"
 }
