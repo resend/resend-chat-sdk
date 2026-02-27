@@ -31,7 +31,7 @@ describe("renderMessage", () => {
     const result = await renderMessage({
       card: {
         type: "card",
-        children: [{ type: "card.text", props: {}, children: "Card content" }],
+        children: [{ type: "text", content: "Card content" }],
       },
     });
     expect(result.html).toContain("Card content");
@@ -43,7 +43,7 @@ describe("renderMessage", () => {
       text: "Fallback text",
       card: {
         type: "card",
-        children: [{ type: "card.text", props: {}, children: "Card wins" }],
+        children: [{ type: "text", content: "Card wins" }],
       },
     });
     expect(result.html).toContain("Card wins");

@@ -13,57 +13,90 @@ import {
 import { render } from "@react-email/render";
 import React from "react";
 
+/**
+ * Matches the Chat SDK CardElement / CardChild shapes.
+ * See: chat/dist/jsx-runtime-Wowykq7Z.d.ts
+ */
 export interface CardNode {
-  children?: CardNode[] | string | null;
+  children?: CardNode[];
+  content?: string;
+  imageUrl?: string;
+  label?: string;
   props?: Record<string, unknown>;
+  style?: string;
+  subtitle?: string;
+  title?: string;
   type: string;
+  url?: string;
+  value?: string;
 }
 
-function renderChildren(
-  nodeChildren: CardNode[] | string | null | undefined
-): React.ReactNode {
-  if (typeof nodeChildren === "string") {
-    return nodeChildren;
+function renderChildren(children: CardNode[] | undefined): React.ReactNode {
+  if (!children || children.length === 0) {
+    return null;
   }
-  if (Array.isArray(nodeChildren)) {
-    return nodeChildren.map((child, i) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: static card tree, no reordering
-      <React.Fragment key={i}>{renderNode(child)}</React.Fragment>
-    ));
-  }
-  return null;
+  return children.map((child, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: static card tree, no reordering
+    <React.Fragment key={i}>{renderNode(child)}</React.Fragment>
+  ));
 }
 
 function renderNode(node: CardNode): React.ReactNode {
-  const children = renderChildren(node.children);
-
   switch (node.type) {
     case "card":
-      return <Section>{children}</Section>;
-    case "card.header":
-      return <Heading as="h2">{children}</Heading>;
-    case "card.body":
-      return <Section>{children}</Section>;
-    case "card.text":
-      return <Text>{children}</Text>;
-    case "card.button":
       return (
-        <Button href={(node.props?.href as string) || "#"}>{children}</Button>
+        <Section>
+          {node.title && <Heading as="h2">{node.title}</Heading>}
+          {node.subtitle && (
+            <Text style={{ color: "#666", marginTop: 0 }}>{node.subtitle}</Text>
+          )}
+          {node.imageUrl && <Img alt={node.title || ""} src={node.imageUrl} />}
+          {renderChildren(node.children)}
+        </Section>
       );
-    case "card.image":
+
+    case "text":
+      return <Text>{node.content || ""}</Text>;
+
+    case "divider":
+      return <Hr />;
+
+    case "image":
       return (
         <Img
-          alt={(node.props?.alt as string) || ""}
-          src={(node.props?.src as string) || ""}
+          alt={node.label || ""}
+          src={node.url || ""}
           width={node.props?.width as number | undefined}
         />
       );
-    case "card.divider":
-      return <Hr />;
-    case "card.link":
-      return <Link href={(node.props?.href as string) || "#"}>{children}</Link>;
+
+    case "actions":
+      return <Section>{renderChildren(node.children)}</Section>;
+
+    case "link-button":
+      return <Button href={node.url || "#"}>{node.label || ""}</Button>;
+
+    case "button":
+      return <Button href={node.url || "#"}>{node.label || ""}</Button>;
+
+    case "link":
+      return <Link href={node.url || "#"}>{node.label || ""}</Link>;
+
+    case "section":
+      return <Section>{renderChildren(node.children)}</Section>;
+
+    case "field":
+      return (
+        <Text>
+          <strong>{node.label || ""}</strong>: {node.value || ""}
+        </Text>
+      );
+
+    case "fields":
+      return <Section>{renderChildren(node.children)}</Section>;
+
     default:
-      return <Text>{children}</Text>;
+      return <Text>{node.content || node.label || ""}</Text>;
   }
 }
 

@@ -2,27 +2,32 @@ import { describe, expect, it } from "vitest";
 import { renderCard } from "../src/card-renderer.js";
 
 describe("renderCard", () => {
-  it("renders a card with header and text", async () => {
+  it("renders a card with title, subtitle, and text", async () => {
     const card = {
       type: "card",
-      children: [
-        { type: "card.header", props: {}, children: "Welcome" },
-        { type: "card.text", props: {}, children: "Hello world" },
-      ],
+      title: "Welcome",
+      subtitle: "Thanks for reaching out",
+      children: [{ type: "text", content: "Hello world" }],
     };
     const html = await renderCard(card);
     expect(html).toContain("Welcome");
+    expect(html).toContain("Thanks for reaching out");
     expect(html).toContain("Hello world");
   });
 
-  it("renders a button with URL", async () => {
+  it("renders a link-button with URL", async () => {
     const card = {
       type: "card",
       children: [
         {
-          type: "card.button",
-          props: { href: "https://example.com" },
-          children: "Click me",
+          type: "actions",
+          children: [
+            {
+              type: "link-button",
+              label: "Click me",
+              url: "https://example.com",
+            },
+          ],
         },
       ],
     };
@@ -36,9 +41,9 @@ describe("renderCard", () => {
       type: "card",
       children: [
         {
-          type: "card.image",
-          props: { src: "https://example.com/img.png", alt: "Test image" },
-          children: null,
+          type: "image",
+          label: "Test image",
+          url: "https://example.com/img.png",
         },
       ],
     };
@@ -50,9 +55,9 @@ describe("renderCard", () => {
     const card = {
       type: "card",
       children: [
-        { type: "card.text", props: {}, children: "Before" },
-        { type: "card.divider", props: {}, children: null },
-        { type: "card.text", props: {}, children: "After" },
+        { type: "text", content: "Before" },
+        { type: "divider" },
+        { type: "text", content: "After" },
       ],
     };
     const html = await renderCard(card);
@@ -67,14 +72,61 @@ describe("renderCard", () => {
       type: "card",
       children: [
         {
-          type: "card.link",
-          props: { href: "https://example.com" },
-          children: "Example",
+          type: "link",
+          label: "Example",
+          url: "https://example.com",
         },
       ],
     };
     const html = await renderCard(card);
     expect(html).toContain("https://example.com");
     expect(html).toContain("Example");
+  });
+
+  it("renders a field", async () => {
+    const card = {
+      type: "card",
+      children: [
+        {
+          type: "fields",
+          children: [{ type: "field", label: "Status", value: "Open" }],
+        },
+      ],
+    };
+    const html = await renderCard(card);
+    expect(html).toContain("Status");
+    expect(html).toContain("Open");
+  });
+
+  it("renders the welcome-cards example card", async () => {
+    const card = {
+      type: "card",
+      title: "Welcome!",
+      subtitle: "Thanks for reaching out",
+      children: [
+        {
+          type: "text",
+          content: "Hi! Thanks for emailing us. We'll get back to you shortly.",
+        },
+        { type: "divider" },
+        {
+          type: "actions",
+          children: [
+            {
+              type: "link-button",
+              label: "Visit our website",
+              url: "https://resend.com",
+            },
+          ],
+        },
+      ],
+    };
+    const html = await renderCard(card);
+    expect(html).toContain("Welcome!");
+    expect(html).toContain("Thanks for reaching out");
+    expect(html).toContain("Hi! Thanks for emailing us");
+    expect(html).toContain("https://resend.com");
+    expect(html).toContain("Visit our website");
+    expect(html.toLowerCase()).toContain("hr");
   });
 });

@@ -37,16 +37,32 @@ export async function renderMessage(input: RenderInput): Promise<RenderOutput> {
 
 function extractTextFromCard(card: CardNode): string {
   const parts: string[] = [];
-  if (!card.children || typeof card.children === "string") {
-    return typeof card.children === "string" ? card.children : "";
+
+  if (card.title) {
+    parts.push(card.title);
   }
-  for (const child of card.children) {
-    if (typeof child.children === "string") {
-      parts.push(child.children);
-    } else if (Array.isArray(child.children)) {
-      parts.push(extractTextFromCard(child));
+  if (card.subtitle) {
+    parts.push(card.subtitle);
+  }
+  if (card.content) {
+    parts.push(card.content);
+  }
+  if (card.label) {
+    parts.push(card.label);
+  }
+  if (card.value) {
+    parts.push(card.value);
+  }
+
+  if (Array.isArray(card.children)) {
+    for (const child of card.children) {
+      const childText = extractTextFromCard(child);
+      if (childText) {
+        parts.push(childText);
+      }
     }
   }
+
   return parts.join("\n");
 }
 
