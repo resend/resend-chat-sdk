@@ -297,7 +297,7 @@ describe("ResendAdapter", () => {
         mockChat.processMessage.mock.calls[0];
 
       expect(adapterArg).toBe(adapter);
-      expect(threadIdArg).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
+      expect(threadIdArg).toMatch(/^resend:sender@example\.com:[0-9a-f]{16}$/);
       expect(messageArg.id).toBe("re_webhook_123");
       expect(messageArg.text).toBe("Hello from webhook!");
       expect(messageArg.author.userId).toBe("sender@example.com");

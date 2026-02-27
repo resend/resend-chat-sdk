@@ -91,8 +91,9 @@ export class ResendAdapter {
       result.event.data.email_id
     );
 
+    const senderAddress = parseEmailAddress(email.from);
     const threadId = await this.threadResolver.resolveThreadId({
-      toAddress: email.to[0],
+      toAddress: senderAddress,
       messageId: email.message_id,
       inReplyTo: email.headers?.["In-Reply-To"],
       references: email.headers?.References,
