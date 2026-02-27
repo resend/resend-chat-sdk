@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 import type { Root } from "mdast";
+import { Message, parseMarkdown } from "chat";
+import type { AdapterPostableMessage } from "chat";
 import { ThreadResolver } from "./thread-resolver.js";
 import { WebhookHandler } from "./webhook-handler.js";
 import { ResendFormatConverter } from "./format-converter.js";
@@ -67,7 +69,7 @@ export class ResendAdapter {
     return this.threadResolver.decodeThreadId(threadId);
   }
 
-  async handleWebhook(request: Request): Promise<{ status: number }> {
+  async handleWebhook(request: Request): Promise<Response> {
     if (!this.webhookHandler || !this.chat) {
       throw new Error("Adapter not initialized. Call initialize() first.");
     }
@@ -82,7 +84,7 @@ export class ResendAdapter {
 
     const result = await this.webhookHandler.parseWebhookRequest(request);
     if (!result.event) {
-      return { status: result.status };
+      return new Response(null, { status: result.status });
     }
 
     const email = await this.webhookHandler.fetchEmailContent(
@@ -101,20 +103,38 @@ export class ResendAdapter {
     const parsed = parseInboundEmail(email, threadId);
     await this.chat.processMessage(this, threadId, parsed);
 
-    return { status: 200 };
+    return new Response(null, { status: 200 });
   }
 
   async postMessage(
     threadId: string,
-    message: { text?: string; formatted?: Root; card?: any },
-    options?: { subject?: string },
-  ): Promise<{ id: string; threadId: string }> {
+    message: AdapterPostableMessage,
+  ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
     if (!this.resend) {
       throw new Error("Adapter not initialized. Call initialize() first.");
     }
 
+    // Normalize AdapterPostableMessage to { text?, formatted?, card? }
+    let normalized: { text?: string; formatted?: Root; card?: any };
+    if (typeof message === "string") {
+      normalized = { text: message };
+    } else if ("markdown" in message) {
+      normalized = { text: (message as any).markdown };
+    } else if ("raw" in message) {
+      normalized = { text: (message as any).raw };
+    } else if ("ast" in message) {
+      normalized = { formatted: (message as any).ast as Root };
+    } else if ("card" in message) {
+      normalized = { card: (message as any).card };
+    } else if ("type" in message) {
+      // CardElement directly
+      normalized = { card: message };
+    } else {
+      normalized = message as { text?: string; formatted?: Root; card?: any };
+    }
+
     const decoded = this.threadResolver.decodeThreadId(threadId);
-    const rendered = await renderMessage(message);
+    const rendered = await renderMessage(normalized);
 
     const fromHeader = this.config.fromName
       ? `${this.config.fromName} <${this.config.fromAddress}>`
@@ -124,11 +144,9 @@ export class ResendAdapter {
     const headers = this.threadResolver.getReplyHeaders(threadId);
 
     const storedSubject = this.threadResolver.getSubject(threadId);
-    const subject = options?.subject
-      ? options.subject
-      : storedSubject
-        ? `Re: ${storedSubject}`
-        : "New message";
+    const subject = storedSubject
+      ? `Re: ${storedSubject}`
+      : "New message";
 
     const response = await this.resend.emails.send({
       from: fromHeader,
@@ -149,6 +167,17 @@ export class ResendAdapter {
 
     return {
       id: response.data.id,
+      raw: {
+        id: response.data.id,
+        messageId,
+        from: this.config.fromAddress,
+        to: [decoded.toAddress],
+        subject,
+        text: rendered.text,
+        html: rendered.html,
+        headers: headers || {},
+        createdAt: new Date().toISOString(),
+      },
       threadId,
     };
   }
@@ -157,11 +186,11 @@ export class ResendAdapter {
     _threadId: string,
     _messageId: string,
     _message: any,
-  ): Promise<void> {
+  ): Promise<never> {
     throw new NotImplementedError("editMessage");
   }
 
-  async deleteMessage(_threadId: string, _messageId: string): Promise<void> {
+  async deleteMessage(_threadId: string, _messageId: string): Promise<never> {
     throw new NotImplementedError("deleteMessage");
   }
 
@@ -169,7 +198,7 @@ export class ResendAdapter {
     _threadId: string,
     _messageId: string,
     _reaction: string,
-  ): Promise<void> {
+  ): Promise<never> {
     throw new NotImplementedError("addReaction");
   }
 
@@ -177,11 +206,11 @@ export class ResendAdapter {
     _threadId: string,
     _messageId: string,
     _reaction: string,
-  ): Promise<void> {
+  ): Promise<never> {
     throw new NotImplementedError("removeReaction");
   }
 
-  async startTyping(_threadId: string): Promise<void> {
+  async startTyping(_threadId: string): Promise<never> {
     throw new NotImplementedError("startTyping");
   }
 
@@ -202,34 +231,45 @@ export class ResendAdapter {
 
   async fetchThread(
     threadId: string,
-  ): Promise<{ id: string; title: string }> {
+  ): Promise<{ id: string; channelId: string; metadata: Record<string, unknown> }> {
     const decoded = this.threadResolver.decodeThreadId(threadId);
     return {
       id: threadId,
-      title: `Conversation with ${decoded.toAddress}`,
+      channelId: `resend:${decoded.toAddress}`,
+      metadata: {
+        title: `Conversation with ${decoded.toAddress}`,
+        toAddress: decoded.toAddress,
+      },
     };
   }
 
   async fetchMessages(
     _threadId: string,
-  ): Promise<{ messages: any[]; hasMore: boolean }> {
-    return { messages: [], hasMore: false };
+  ): Promise<{ messages: any[]; nextCursor?: string }> {
+    return { messages: [] };
   }
 
-  parseMessage(raw: ResendRawMessage): {
-    id: string;
-    text: string;
-    author: { id: string; name: string; isBot: boolean };
-  } {
+  parseMessage(raw: ResendRawMessage): Message<ResendRawMessage> {
     const authorEmail = parseEmailAddress(raw.from);
-    return {
+    const text = raw.text || "";
+    return new Message<ResendRawMessage>({
       id: raw.id,
-      text: raw.text || "",
+      threadId: "", // filled in by Chat SDK
+      text,
+      formatted: parseMarkdown(text),
+      raw,
       author: {
-        id: authorEmail,
-        name: authorEmail,
+        userId: authorEmail,
+        fullName: authorEmail,
+        userName: authorEmail,
         isBot: false,
+        isMe: authorEmail === this.config.fromAddress,
       },
-    };
+      metadata: {
+        dateSent: new Date(raw.createdAt),
+        edited: false,
+      },
+      attachments: [],
+    });
   }
 }

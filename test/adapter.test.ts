@@ -105,17 +105,22 @@ describe("ResendAdapter", () => {
       );
     });
 
-    it("accepts optional subject for new threads", async () => {
+    it("uses stored subject with Re: prefix", async () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);
+
+      // Simulate tracking a subject from an inbound email
+      (adapter as any).threadResolver.trackSubject(
+        "resend:user@example.com:abcdef0123456789",
+        "Original Subject",
+      );
 
       await adapter.postMessage(
         "resend:user@example.com:abcdef0123456789",
         { text: "Hello" },
-        { subject: "Custom Subject" },
       );
       expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: "Custom Subject" }),
+        expect.objectContaining({ subject: "Re: Original Subject" }),
       );
     });
   });
@@ -178,7 +183,8 @@ describe("ResendAdapter", () => {
     it("returns thread info", async () => {
       const info = await adapter.fetchThread("resend:user@example.com:abc123");
       expect(info.id).toBe("resend:user@example.com:abc123");
-      expect(info.title).toContain("user@example.com");
+      expect(info.channelId).toBe("resend:user@example.com");
+      expect(info.metadata.toAddress).toBe("user@example.com");
     });
   });
 
@@ -186,7 +192,7 @@ describe("ResendAdapter", () => {
     it("returns empty result", async () => {
       const result = await adapter.fetchMessages("resend:user@example.com:abc123");
       expect(result.messages).toEqual([]);
-      expect(result.hasMore).toBe(false);
+      expect(result.nextCursor).toBeUndefined();
     });
   });
 
@@ -203,7 +209,7 @@ describe("ResendAdapter", () => {
       });
       expect(parsed.id).toBe("re_123");
       expect(parsed.text).toBe("Hello");
-      expect(parsed.author.id).toBe("user@example.com");
+      expect(parsed.author.userId).toBe("user@example.com");
     });
   });
 
