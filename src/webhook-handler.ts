@@ -1,15 +1,15 @@
 import type { Resend } from "resend";
-import type { ResendWebhookPayload, ResendReceivedEmail } from "./types.js";
+import type { ResendReceivedEmail, ResendWebhookPayload } from "./types.js";
 
 interface WebhookResult {
-  status: number;
   event: ResendWebhookPayload | null;
+  status: number;
 }
 
 export class WebhookHandler {
   constructor(
-    private resend: Resend,
-    private webhookSecret: string,
+    private readonly resend: Resend,
+    private readonly webhookSecret: string
   ) {}
 
   async parseWebhookRequest(request: Request): Promise<WebhookResult> {
@@ -47,7 +47,7 @@ export class WebhookHandler {
     const response = await this.resend.emails.receiving.get(emailId);
     if (response.error || !response.data) {
       throw new Error(
-        `Failed to fetch email content: ${response.error?.message || "Unknown error"}`,
+        `Failed to fetch email content: ${response.error?.message || "Unknown error"}`
       );
     }
     return response.data as unknown as ResendReceivedEmail;

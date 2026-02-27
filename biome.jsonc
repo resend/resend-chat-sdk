@@ -1,0 +1,29 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
+  "extends": ["ultracite/biome/core"],
+  "linter": {
+    "rules": {
+      "performance": {
+        "noBarrelFile": "off",
+        "useTopLevelRegex": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "useAwait": "warn"
+      },
+      "style": {
+        "noParameterProperties": "off"
+      }
+    }
+  },
+  "files": {
+    "includes": [
+      "src/**",
+      "test/**",
+      "examples/**",
+      "*.jsonc",
+      "*.json",
+      "*.ts"
+    ]
+  }
+}

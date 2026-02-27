@@ -1,17 +1,19 @@
-import { hashMessageId } from "./utils.js";
 import type { ResendThreadId } from "./types.js";
+import { hashMessageId } from "./utils.js";
+
+const WHITESPACE_RE = /\s+/;
 
 interface ResolveInput {
-  toAddress: string;
-  messageId: string;
   inReplyTo: string | undefined;
+  messageId: string;
   references: string | undefined;
+  toAddress: string;
 }
 
 export class ThreadResolver {
-  private messageToThread = new Map<string, string>();
-  private threadMessages = new Map<string, string[]>();
-  private threadSubjects = new Map<string, string>();
+  private readonly messageToThread = new Map<string, string>();
+  private readonly threadMessages = new Map<string, string[]>();
+  private readonly threadSubjects = new Map<string, string>();
 
   encodeThreadId(id: ResendThreadId): string {
     return `resend:${id.toAddress}:${id.rootMessageIdHash}`;
@@ -43,7 +45,10 @@ export class ThreadResolver {
     }
 
     const hash = await hashMessageId(messageId);
-    const threadId = this.encodeThreadId({ toAddress, rootMessageIdHash: hash });
+    const threadId = this.encodeThreadId({
+      toAddress,
+      rootMessageIdHash: hash,
+    });
     this.trackMessage(threadId, messageId);
     return threadId;
   }
@@ -59,13 +64,17 @@ export class ThreadResolver {
 
   getLastMessageId(threadId: string): string | undefined {
     const messages = this.threadMessages.get(threadId);
-    if (!messages || messages.length === 0) return undefined;
-    return messages[messages.length - 1];
+    if (!messages || messages.length === 0) {
+      return undefined;
+    }
+    return messages.at(-1);
   }
 
   getReplyHeaders(threadId: string): Record<string, string> | undefined {
     const lastMessageId = this.getLastMessageId(threadId);
-    if (!lastMessageId) return undefined;
+    if (!lastMessageId) {
+      return undefined;
+    }
 
     const messages = this.threadMessages.get(threadId) || [];
     return {
@@ -84,10 +93,15 @@ export class ThreadResolver {
     return this.threadSubjects.get(threadId);
   }
 
-  private findRootMessageId(inReplyTo: string | undefined, references: string | undefined): string | undefined {
+  private findRootMessageId(
+    inReplyTo: string | undefined,
+    references: string | undefined
+  ): string | undefined {
     if (references) {
-      const refs = references.trim().split(/\s+/);
-      if (refs.length > 0) return refs[0];
+      const refs = references.trim().split(WHITESPACE_RE);
+      if (refs.length > 0) {
+        return refs[0];
+      }
     }
     return inReplyTo;
   }

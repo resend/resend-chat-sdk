@@ -1,13 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 
-export async function hashMessageId(messageId: string): Promise<string> {
+const EMAIL_ANGLE_BRACKET_RE = /<([^>]+)>/;
+
+export function hashMessageId(messageId: string): string {
   const hash = createHash("sha256").update(messageId).digest("hex");
   return hash.slice(0, 16);
 }
 
 export function parseEmailAddress(input: string): string {
   const trimmed = input.trim();
-  const match = trimmed.match(/<([^>]+)>/);
+  const match = trimmed.match(EMAIL_ANGLE_BRACKET_RE);
   const email = match ? match[1] : trimmed;
   return email.toLowerCase();
 }

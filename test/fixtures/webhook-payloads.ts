@@ -1,4 +1,7 @@
-import type { ResendWebhookPayload, ResendReceivedEmail } from "../../src/types.js";
+import type {
+  ResendReceivedEmail,
+  ResendWebhookPayload,
+} from "../../src/types.js";
 
 export const validWebhookPayload: ResendWebhookPayload = {
   type: "email.received",

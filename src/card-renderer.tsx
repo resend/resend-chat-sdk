@@ -1,33 +1,41 @@
-import { render } from "@react-email/render";
 import {
-  Html,
   Body,
+  Button,
   Container,
+  Heading,
+  Hr,
+  Html,
+  Img,
+  Link,
   Section,
   Text,
-  Heading,
-  Button,
-  Link,
-  Img,
-  Hr,
 } from "@react-email/components";
+import { render } from "@react-email/render";
 import React from "react";
 
 export interface CardNode {
-  type: string;
-  props?: Record<string, unknown>;
   children?: CardNode[] | string | null;
+  props?: Record<string, unknown>;
+  type: string;
+}
+
+function renderChildren(
+  nodeChildren: CardNode[] | string | null | undefined
+): React.ReactNode {
+  if (typeof nodeChildren === "string") {
+    return nodeChildren;
+  }
+  if (Array.isArray(nodeChildren)) {
+    return nodeChildren.map((child, i) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: static card tree, no reordering
+      <React.Fragment key={i}>{renderNode(child)}</React.Fragment>
+    ));
+  }
+  return null;
 }
 
 function renderNode(node: CardNode): React.ReactNode {
-  const children =
-    typeof node.children === "string"
-      ? node.children
-      : Array.isArray(node.children)
-        ? node.children.map((child, i) => (
-            <React.Fragment key={i}>{renderNode(child)}</React.Fragment>
-          ))
-        : null;
+  const children = renderChildren(node.children);
 
   switch (node.type) {
     case "card":
@@ -45,17 +53,15 @@ function renderNode(node: CardNode): React.ReactNode {
     case "card.image":
       return (
         <Img
-          src={(node.props?.src as string) || ""}
           alt={(node.props?.alt as string) || ""}
+          src={(node.props?.src as string) || ""}
           width={node.props?.width as number | undefined}
         />
       );
     case "card.divider":
       return <Hr />;
     case "card.link":
-      return (
-        <Link href={(node.props?.href as string) || "#"}>{children}</Link>
-      );
+      return <Link href={(node.props?.href as string) || "#"}>{children}</Link>;
     default:
       return <Text>{children}</Text>;
   }

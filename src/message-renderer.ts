@@ -1,13 +1,13 @@
-import { ResendFormatConverter } from "./format-converter.js";
-import { renderCard } from "./card-renderer.js";
-import type { CardNode } from "./card-renderer.js";
-import { stripHtml } from "./utils.js";
 import type { Root } from "mdast";
+import type { CardNode } from "./card-renderer.js";
+import { renderCard } from "./card-renderer.js";
+import { ResendFormatConverter } from "./format-converter.js";
+import { stripHtml } from "./utils.js";
 
 interface RenderInput {
-  text?: string;
-  formatted?: Root;
   card?: CardNode;
+  formatted?: Root;
+  text?: string;
 }
 
 interface RenderOutput {

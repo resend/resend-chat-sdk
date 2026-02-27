@@ -15,7 +15,10 @@
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "peerDependencies": {
     "@chat-adapter/shared": "4.15.0",
@@ -29,12 +32,14 @@
     "resend": "6.9.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
     "@chat-adapter/shared": "4.15.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
     "chat": "4.15.0",
     "react": "^19.2.4",
     "typescript": "^5.7.0",
+    "ultracite": "^7.2.4",
     "vitest": "^3.0.0"
   },
   "files": [

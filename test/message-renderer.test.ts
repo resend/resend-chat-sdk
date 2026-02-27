@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderMessage } from "../src/message-renderer.js";
 
 describe("renderMessage", () => {
@@ -31,9 +31,7 @@ describe("renderMessage", () => {
     const result = await renderMessage({
       card: {
         type: "card",
-        children: [
-          { type: "card.text", props: {}, children: "Card content" },
-        ],
+        children: [{ type: "card.text", props: {}, children: "Card content" }],
       },
     });
     expect(result.html).toContain("Card content");
@@ -45,9 +43,7 @@ describe("renderMessage", () => {
       text: "Fallback text",
       card: {
         type: "card",
-        children: [
-          { type: "card.text", props: {}, children: "Card wins" },
-        ],
+        children: [{ type: "card.text", props: {}, children: "Card wins" }],
       },
     });
     expect(result.html).toContain("Card wins");

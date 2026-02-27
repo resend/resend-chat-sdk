@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { hashMessageId, parseEmailAddress, generateMessageId, stripHtml } from "../src/utils.js";
+import { describe, expect, it } from "vitest";
+import {
+  generateMessageId,
+  hashMessageId,
+  parseEmailAddress,
+  stripHtml,
+} from "../src/utils.js";
 
 describe("hashMessageId", () => {
   it("returns 16-char hex string", async () => {
@@ -22,7 +27,9 @@ describe("hashMessageId", () => {
 
 describe("parseEmailAddress", () => {
   it("extracts email from angle bracket format", () => {
-    expect(parseEmailAddress("John Doe <john@example.com>")).toBe("john@example.com");
+    expect(parseEmailAddress("John Doe <john@example.com>")).toBe(
+      "john@example.com"
+    );
   });
 
   it("returns plain email as-is", () => {
@@ -57,7 +64,9 @@ describe("stripHtml", () => {
   });
 
   it("handles nested tags", () => {
-    expect(stripHtml("<div><strong>Bold</strong> text</div>")).toBe("Bold text");
+    expect(stripHtml("<div><strong>Bold</strong> text</div>")).toBe(
+      "Bold text"
+    );
   });
 
   it("trims whitespace", () => {

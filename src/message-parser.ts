@@ -1,41 +1,17 @@
+import { Message, parseMarkdown } from "chat";
+import type { ResendRawMessage, ResendReceivedEmail } from "./types.js";
 import { parseEmailAddress, stripHtml } from "./utils.js";
-import { ResendFormatConverter } from "./format-converter.js";
-import type { ResendReceivedEmail, ResendRawMessage } from "./types.js";
 
-interface ParsedMessage {
-  id: string;
-  threadId: string;
-  text: string;
-  formatted: ReturnType<ResendFormatConverter["toAst"]>;
-  raw: ResendRawMessage;
-  author: {
-    id: string;
-    name: string;
-    isBot: boolean;
-  };
-  metadata: {
-    subject: string;
-    messageId: string;
-    [key: string]: unknown;
-  };
-  attachments: Array<{
-    filename: string;
-    contentType: string;
-    url?: string;
-  }>;
-  isMention: boolean;
-}
-
-const converter = new ResendFormatConverter();
+const DISPLAY_NAME_RE = /^([^<]+)<[^>]+>$/;
 
 export function parseInboundEmail(
   email: ResendReceivedEmail,
   threadId: string,
-): ParsedMessage {
+  fromAddress: string
+): Message<ResendRawMessage> {
   const authorEmail = parseEmailAddress(email.from);
   const authorName = extractDisplayName(email.from);
   const text = email.text || stripHtml(email.html || "");
-  const formatted = converter.toAst(text);
 
   const raw: ResendRawMessage = {
     id: email.id,
@@ -50,31 +26,36 @@ export function parseInboundEmail(
     createdAt: email.created_at,
   };
 
-  return {
+  return new Message<ResendRawMessage>({
     id: email.id,
     threadId,
     text,
-    formatted,
+    formatted: parseMarkdown(text),
     raw,
     author: {
-      id: authorEmail,
-      name: authorName,
+      userId: authorEmail,
+      userName: authorEmail,
+      fullName: authorName,
       isBot: false,
+      isMe: authorEmail === fromAddress,
     },
     metadata: {
-      subject: email.subject,
-      messageId: email.message_id,
+      dateSent: new Date(email.created_at),
+      edited: false,
     },
     attachments: (email.attachments || []).map((a) => ({
-      filename: a.filename,
-      contentType: a.content_type,
+      type: "file" as const,
+      name: a.filename,
+      mimeType: a.content_type,
     })),
     isMention: true,
-  };
+  });
 }
 
 function extractDisplayName(from: string): string {
-  const match = from.match(/^([^<]+)<[^>]+>$/);
-  if (match) return match[1].trim();
+  const match = from.match(DISPLAY_NAME_RE);
+  if (match) {
+    return match[1].trim();
+  }
   return from;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendAdapter } from "../src/adapter.js";
 import type { ResendAdapterConfig } from "../src/types.js";
 
@@ -61,9 +61,13 @@ describe("ResendAdapter", () => {
         apiKey: undefined,
       });
       const env = process.env.RESEND_API_KEY;
-      delete process.env.RESEND_API_KEY;
-      await expect(noKeyAdapter.initialize({ processMessage: vi.fn() })).rejects.toThrow();
-      if (env) process.env.RESEND_API_KEY = env;
+      process.env.RESEND_API_KEY = "";
+      await expect(
+        noKeyAdapter.initialize({ processMessage: vi.fn() })
+      ).rejects.toThrow();
+      if (env) {
+        process.env.RESEND_API_KEY = env;
+      }
     });
   });
 
@@ -86,7 +90,7 @@ describe("ResendAdapter", () => {
 
       const result = await adapter.postMessage(
         "resend:user@example.com:abcdef0123456789",
-        { text: "Hello from bot" },
+        { text: "Hello from bot" }
       );
       expect(result.id).toBe("re_sent_123");
       expect(result.threadId).toBe("resend:user@example.com:abcdef0123456789");
@@ -96,12 +100,11 @@ describe("ResendAdapter", () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);
 
-      await adapter.postMessage(
-        "resend:user@example.com:abcdef0123456789",
-        { text: "Hello" },
-      );
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        text: "Hello",
+      });
       expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: "New message" }),
+        expect.objectContaining({ subject: "New message" })
       );
     });
 
@@ -112,15 +115,14 @@ describe("ResendAdapter", () => {
       // Simulate tracking a subject from an inbound email
       (adapter as any).threadResolver.trackSubject(
         "resend:user@example.com:abcdef0123456789",
-        "Original Subject",
+        "Original Subject"
       );
 
-      await adapter.postMessage(
-        "resend:user@example.com:abcdef0123456789",
-        { text: "Hello" },
-      );
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        text: "Hello",
+      });
       expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: "Re: Original Subject" }),
+        expect.objectContaining({ subject: "Re: Original Subject" })
       );
     });
   });
@@ -128,32 +130,32 @@ describe("ResendAdapter", () => {
   describe("unsupported operations", () => {
     it("editMessage throws", async () => {
       await expect(
-        adapter.editMessage("thread", "msg", { text: "edited" }),
+        adapter.editMessage("thread", "msg", { text: "edited" })
       ).rejects.toThrow(/not implemented|not supported/i);
     });
 
     it("deleteMessage throws", async () => {
-      await expect(
-        adapter.deleteMessage("thread", "msg"),
-      ).rejects.toThrow(/not implemented|not supported/i);
+      await expect(adapter.deleteMessage("thread", "msg")).rejects.toThrow(
+        /not implemented|not supported/i
+      );
     });
 
     it("addReaction throws", async () => {
       await expect(
-        adapter.addReaction("thread", "msg", "thumbsup"),
+        adapter.addReaction("thread", "msg", "thumbsup")
       ).rejects.toThrow(/not implemented|not supported/i);
     });
 
     it("removeReaction throws", async () => {
       await expect(
-        adapter.removeReaction("thread", "msg", "thumbsup"),
+        adapter.removeReaction("thread", "msg", "thumbsup")
       ).rejects.toThrow(/not implemented|not supported/i);
     });
 
     it("startTyping throws", async () => {
-      await expect(
-        adapter.startTyping("thread"),
-      ).rejects.toThrow(/not implemented|not supported/i);
+      await expect(adapter.startTyping("thread")).rejects.toThrow(
+        /not implemented|not supported/i
+      );
     });
   });
 
@@ -190,7 +192,9 @@ describe("ResendAdapter", () => {
 
   describe("fetchMessages", () => {
     it("returns empty result", async () => {
-      const result = await adapter.fetchMessages("resend:user@example.com:abc123");
+      const result = await adapter.fetchMessages(
+        "resend:user@example.com:abc123"
+      );
       expect(result.messages).toEqual([]);
       expect(result.nextCursor).toBeUndefined();
     });
@@ -220,7 +224,7 @@ describe("ResendAdapter", () => {
         webhookSecret: undefined,
       });
       const env = process.env.RESEND_WEBHOOK_SECRET;
-      delete process.env.RESEND_WEBHOOK_SECRET;
+      process.env.RESEND_WEBHOOK_SECRET = "";
 
       const mockChat = { processMessage: vi.fn() };
       await noSecretAdapter.initialize(mockChat);
@@ -236,10 +240,12 @@ describe("ResendAdapter", () => {
       });
 
       await expect(noSecretAdapter.handleWebhook(request)).rejects.toThrow(
-        "Webhook secret is required",
+        "Webhook secret is required"
       );
 
-      if (env) process.env.RESEND_WEBHOOK_SECRET = env;
+      if (env) {
+        process.env.RESEND_WEBHOOK_SECRET = env;
+      }
     });
 
     it("processes webhook and calls chat.processMessage with correct args", async () => {
@@ -294,8 +300,8 @@ describe("ResendAdapter", () => {
       expect(threadIdArg).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
       expect(messageArg.id).toBe("re_webhook_123");
       expect(messageArg.text).toBe("Hello from webhook!");
-      expect(messageArg.author.id).toBe("sender@example.com");
-      expect(messageArg.metadata.subject).toBe("Test webhook email");
+      expect(messageArg.author.userId).toBe("sender@example.com");
+      expect(messageArg.raw.subject).toBe("Test webhook email");
     });
   });
 });

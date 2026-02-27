@@ -1,11 +1,15 @@
-import { toHast } from "mdast-util-to-hast";
 import { toHtml } from "hast-util-to-html";
 import type { Root, RootContent } from "mdast";
+import { toHast } from "mdast-util-to-hast";
+
+const PARAGRAPH_SPLIT_RE = /\n\n+/;
 
 export class ResendFormatConverter {
   fromAst(ast: Root): string {
     const hast = toHast(ast);
-    if (!hast) return "";
+    if (!hast) {
+      return "";
+    }
     return toHtml(hast);
   }
 
@@ -14,7 +18,7 @@ export class ResendFormatConverter {
       return { type: "root", children: [] };
     }
 
-    const paragraphs = text.split(/\n\n+/);
+    const paragraphs = text.split(PARAGRAPH_SPLIT_RE);
     const children: RootContent[] = paragraphs
       .filter((p) => p.trim() !== "")
       .map((p) => ({

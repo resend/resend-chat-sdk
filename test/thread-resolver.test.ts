@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ThreadResolver } from "../src/thread-resolver.js";
 import type { ResendThreadId } from "../src/types.js";
 
@@ -11,13 +11,17 @@ describe("ThreadResolver", () => {
         toAddress: "bot@example.com",
         rootMessageIdHash: "a1b2c3d4e5f6a7b8",
       };
-      expect(resolver.encodeThreadId(id)).toBe("resend:bot@example.com:a1b2c3d4e5f6a7b8");
+      expect(resolver.encodeThreadId(id)).toBe(
+        "resend:bot@example.com:a1b2c3d4e5f6a7b8"
+      );
     });
   });
 
   describe("decodeThreadId", () => {
     it("decodes resend:{to}:{hash} format", () => {
-      const decoded = resolver.decodeThreadId("resend:bot@example.com:a1b2c3d4e5f6a7b8");
+      const decoded = resolver.decodeThreadId(
+        "resend:bot@example.com:a1b2c3d4e5f6a7b8"
+      );
       expect(decoded).toEqual({
         toAddress: "bot@example.com",
         rootMessageIdHash: "a1b2c3d4e5f6a7b8",
@@ -87,13 +91,15 @@ describe("ThreadResolver", () => {
       resolver.trackMessage("resend:bot@example.com:abc123", "<msg@test.com>");
       const headers = resolver.getReplyHeaders("resend:bot@example.com:abc123");
       expect(headers).toBeDefined();
-      expect(headers!["In-Reply-To"]).toBe("<msg@test.com>");
-      expect(headers!["References"]).toContain("<msg@test.com>");
+      expect(headers?.["In-Reply-To"]).toBe("<msg@test.com>");
+      expect(headers?.References).toContain("<msg@test.com>");
     });
 
     it("returns undefined when no messages tracked", () => {
       const resolver = new ThreadResolver();
-      const headers = resolver.getReplyHeaders("resend:bot@example.com:unknown");
+      const headers = resolver.getReplyHeaders(
+        "resend:bot@example.com:unknown"
+      );
       expect(headers).toBeUndefined();
     });
   });
@@ -103,12 +109,16 @@ describe("ThreadResolver", () => {
       const resolver = new ThreadResolver();
       resolver.trackMessage("resend:bot@example.com:abc123", "<msg1@test.com>");
       resolver.trackMessage("resend:bot@example.com:abc123", "<msg2@test.com>");
-      expect(resolver.getLastMessageId("resend:bot@example.com:abc123")).toBe("<msg2@test.com>");
+      expect(resolver.getLastMessageId("resend:bot@example.com:abc123")).toBe(
+        "<msg2@test.com>"
+      );
     });
 
     it("returns undefined for unknown thread", () => {
       const resolver = new ThreadResolver();
-      expect(resolver.getLastMessageId("resend:bot@example.com:unknown")).toBeUndefined();
+      expect(
+        resolver.getLastMessageId("resend:bot@example.com:unknown")
+      ).toBeUndefined();
     });
   });
 
@@ -116,19 +126,25 @@ describe("ThreadResolver", () => {
     it("stores and retrieves subject for thread", () => {
       const resolver = new ThreadResolver();
       resolver.trackSubject("resend:bot@example.com:abc123", "Hello World");
-      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe("Hello World");
+      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe(
+        "Hello World"
+      );
     });
 
     it("keeps first subject, ignores subsequent", () => {
       const resolver = new ThreadResolver();
       resolver.trackSubject("resend:bot@example.com:abc123", "First Subject");
       resolver.trackSubject("resend:bot@example.com:abc123", "Second Subject");
-      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe("First Subject");
+      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe(
+        "First Subject"
+      );
     });
 
     it("returns undefined for unknown thread", () => {
       const resolver = new ThreadResolver();
-      expect(resolver.getSubject("resend:bot@example.com:unknown")).toBeUndefined();
+      expect(
+        resolver.getSubject("resend:bot@example.com:unknown")
+      ).toBeUndefined();
     });
   });
 });

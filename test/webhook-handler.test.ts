@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WebhookHandler } from "../src/webhook-handler.js";
 
 // Mock resend client — matches real SDK shapes
@@ -83,7 +83,7 @@ describe("WebhookHandler", () => {
       const result = await handler.parseWebhookRequest(request);
       expect(result.status).toBe(200);
       expect(result.event).not.toBeNull();
-      expect(result.event!.data.email_id).toBe("re_123");
+      expect(result.event?.data.email_id).toBe("re_123");
     });
   });
 
@@ -113,7 +113,7 @@ describe("WebhookHandler", () => {
       });
 
       await expect(handler.fetchEmailContent("re_missing")).rejects.toThrow(
-        "Failed to fetch email content: Email not found",
+        "Failed to fetch email content: Email not found"
       );
     });
 
@@ -121,7 +121,7 @@ describe("WebhookHandler", () => {
       mockReceivingGet.mockResolvedValue({ data: null, error: {} });
 
       await expect(handler.fetchEmailContent("re_missing")).rejects.toThrow(
-        "Failed to fetch email content: Unknown error",
+        "Failed to fetch email content: Unknown error"
       );
     });
   });

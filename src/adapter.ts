@@ -1,22 +1,22 @@
-import { Resend } from "resend";
-import type { Root } from "mdast";
-import { Message, parseMarkdown } from "chat";
 import type { AdapterPostableMessage } from "chat";
-import { ThreadResolver } from "./thread-resolver.js";
-import { WebhookHandler } from "./webhook-handler.js";
+import { Message, parseMarkdown } from "chat";
+import type { Root } from "mdast";
+import { Resend } from "resend";
 import { ResendFormatConverter } from "./format-converter.js";
 import { parseInboundEmail } from "./message-parser.js";
 import { renderMessage } from "./message-renderer.js";
-import {
-  generateMessageId,
-  parseEmailAddress,
-  hashMessageId,
-} from "./utils.js";
+import { ThreadResolver } from "./thread-resolver.js";
 import type {
   ResendAdapterConfig,
-  ResendThreadId,
   ResendRawMessage,
+  ResendThreadId,
 } from "./types.js";
+import {
+  generateMessageId,
+  hashMessageId,
+  parseEmailAddress,
+} from "./utils.js";
+import { WebhookHandler } from "./webhook-handler.js";
 
 export interface ChatInstance {
   processMessage(adapter: any, threadId: string, message: any): void;
@@ -33,11 +33,11 @@ export class ResendAdapter {
   readonly name = "resend";
   readonly userName: string;
 
-  private config: ResendAdapterConfig;
+  private readonly config: ResendAdapterConfig;
   private resend: Resend | null = null;
   private chat: ChatInstance | null = null;
-  private threadResolver = new ThreadResolver();
-  private formatConverter = new ResendFormatConverter();
+  private readonly threadResolver = new ThreadResolver();
+  private readonly formatConverter = new ResendFormatConverter();
   private webhookHandler: WebhookHandler | null = null;
 
   constructor(config: ResendAdapterConfig) {
@@ -49,7 +49,7 @@ export class ResendAdapter {
     const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var.",
+        "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var."
       );
     }
 
@@ -70,7 +70,7 @@ export class ResendAdapter {
   }
 
   async handleWebhook(request: Request): Promise<Response> {
-    if (!this.webhookHandler || !this.chat) {
+    if (!(this.webhookHandler && this.chat)) {
       throw new Error("Adapter not initialized. Call initialize() first.");
     }
 
@@ -78,7 +78,7 @@ export class ResendAdapter {
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET;
     if (!webhookSecret) {
       throw new Error(
-        "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env)",
+        "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env)"
       );
     }
 
@@ -88,19 +88,19 @@ export class ResendAdapter {
     }
 
     const email = await this.webhookHandler.fetchEmailContent(
-      result.event.data.email_id,
+      result.event.data.email_id
     );
 
     const threadId = await this.threadResolver.resolveThreadId({
       toAddress: email.to[0],
       messageId: email.message_id,
       inReplyTo: email.headers?.["In-Reply-To"],
-      references: email.headers?.["References"],
+      references: email.headers?.References,
     });
 
     this.threadResolver.trackSubject(threadId, email.subject);
 
-    const parsed = parseInboundEmail(email, threadId);
+    const parsed = parseInboundEmail(email, threadId, this.config.fromAddress);
     await this.chat.processMessage(this, threadId, parsed);
 
     return new Response(null, { status: 200 });
@@ -108,7 +108,7 @@ export class ResendAdapter {
 
   async postMessage(
     threadId: string,
-    message: AdapterPostableMessage,
+    message: AdapterPostableMessage
   ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
     if (!this.resend) {
       throw new Error("Adapter not initialized. Call initialize() first.");
@@ -144,9 +144,7 @@ export class ResendAdapter {
     const headers = this.threadResolver.getReplyHeaders(threadId);
 
     const storedSubject = this.threadResolver.getSubject(threadId);
-    const subject = storedSubject
-      ? `Re: ${storedSubject}`
-      : "New message";
+    const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
 
     const response = await this.resend.emails.send({
       from: fromHeader,
@@ -159,7 +157,7 @@ export class ResendAdapter {
 
     if (response.error || !response.data) {
       throw new Error(
-        `Failed to send email: ${response.error?.message || "Unknown error"}`,
+        `Failed to send email: ${response.error?.message || "Unknown error"}`
       );
     }
 
@@ -185,7 +183,7 @@ export class ResendAdapter {
   async editMessage(
     _threadId: string,
     _messageId: string,
-    _message: any,
+    _message: any
   ): Promise<never> {
     throw new NotImplementedError("editMessage");
   }
@@ -197,7 +195,7 @@ export class ResendAdapter {
   async addReaction(
     _threadId: string,
     _messageId: string,
-    _reaction: string,
+    _reaction: string
   ): Promise<never> {
     throw new NotImplementedError("addReaction");
   }
@@ -205,7 +203,7 @@ export class ResendAdapter {
   async removeReaction(
     _threadId: string,
     _messageId: string,
-    _reaction: string,
+    _reaction: string
   ): Promise<never> {
     throw new NotImplementedError("removeReaction");
   }
@@ -229,9 +227,11 @@ export class ResendAdapter {
     return threadId;
   }
 
-  async fetchThread(
-    threadId: string,
-  ): Promise<{ id: string; channelId: string; metadata: Record<string, unknown> }> {
+  async fetchThread(threadId: string): Promise<{
+    id: string;
+    channelId: string;
+    metadata: Record<string, unknown>;
+  }> {
     const decoded = this.threadResolver.decodeThreadId(threadId);
     return {
       id: threadId,
@@ -244,7 +244,7 @@ export class ResendAdapter {
   }
 
   async fetchMessages(
-    _threadId: string,
+    _threadId: string
   ): Promise<{ messages: any[]; nextCursor?: string }> {
     return { messages: [] };
   }
