@@ -5,7 +5,7 @@ Vercel Chat SDK adapter for [Resend](https://resend.com) email. Bidirectional: r
 ## Install
 
 ```bash
-npm install @resend/chat-sdk-adapter chat @chat-adapter/shared
+pnpm add @resend/chat-sdk-adapter chat @chat-adapter/shared
 ```
 
 ## Quick Start
