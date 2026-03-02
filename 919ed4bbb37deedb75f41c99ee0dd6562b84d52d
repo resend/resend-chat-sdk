@@ -1,0 +1,23 @@
+.github/workflows/ci.yml
+  df68f1c070ed1b54 5,7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "919ed4bbb37deedb75f41c99ee0dd6562b84d52d",
+  "prompts": {
+    "df68f1c070ed1b54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2660382f-7918-4a2b-8c77-e1188c470cd6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
