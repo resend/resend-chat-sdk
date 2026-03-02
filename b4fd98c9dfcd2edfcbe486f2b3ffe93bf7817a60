@@ -1,0 +1,47 @@
+examples/notifications/server.ts
+  682751839bcb114b 5
+examples/attachments/package.json
+  682751839bcb114b 11
+examples/attachments/server.ts
+  682751839bcb114b 4-5
+examples/basic/package.json
+  682751839bcb114b 11
+examples/welcome-cards/package.json
+  682751839bcb114b 11
+src/index.ts
+  682751839bcb114b 1
+examples/support-bot/package.json
+  682751839bcb114b 11
+examples/welcome-cards/server.ts
+  682751839bcb114b 4
+examples/support-bot/server.ts
+  682751839bcb114b 4-5
+README.md
+  682751839bcb114b 1,8,14
+examples/basic/server.ts
+  682751839bcb114b 4
+package.json
+  682751839bcb114b 2
+examples/notifications/package.json
+  682751839bcb114b 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "b4fd98c9dfcd2edfcbe486f2b3ffe93bf7817a60",
+  "prompts": {
+    "682751839bcb114b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88dd52b6-44dc-4faa-a40c-f93dc0ae4e35",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 17,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    }
+  }
+}
