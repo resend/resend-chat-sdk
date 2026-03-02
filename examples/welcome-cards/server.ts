@@ -1,10 +1,10 @@
 // Load .env manually (no dotenv dep)
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { createResendAdapter } from "resend-chat-sdk";
 import { MemoryStateAdapter } from "@chat-adapter/state-memory";
 import type { CardElement } from "chat";
 import { Chat } from "chat";
+import { createResendAdapter } from "resend-chat-sdk";
 
 try {
   const env = readFileSync(".env", "utf-8");
