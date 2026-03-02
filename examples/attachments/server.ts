@@ -1,8 +1,8 @@
 // Load .env manually (no dotenv dep)
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import type { ResendRawMessage } from "@chat-adapter/resend";
-import { createResendAdapter } from "@chat-adapter/resend";
+import type { ResendRawMessage } from "resend-chat-sdk";
+import { createResendAdapter } from "resend-chat-sdk";
 import { MemoryStateAdapter } from "@chat-adapter/state-memory";
 import { Chat } from "chat";
 
