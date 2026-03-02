@@ -1,0 +1,29 @@
+scripts/pull-request-title-check.ts
+  da3f54f9ba02d8d1 1-27
+.github/workflows/lint.yml
+  da3f54f9ba02d8d1 1-26
+.github/workflows/pull-request-title-check.yml
+  da3f54f9ba02d8d1 1-23
+.github/workflows/tests.yml
+  da3f54f9ba02d8d1 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "80387683bc2ef77f818c797df193053b4a3df709",
+  "prompts": {
+    "da3f54f9ba02d8d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "158f11f0-e940-4e18-ab4b-95532a3f1d9c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 116,
+      "total_deletions": 2,
+      "accepted_lines": 114,
+      "overriden_lines": 0
+    }
+  }
+}
