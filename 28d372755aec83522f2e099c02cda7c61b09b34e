@@ -1,0 +1,37 @@
+examples/notifications/package.json
+  f0405973e4016719 7-8
+examples/basic/package.json
+  f0405973e4016719 7-8
+README.md
+  f0405973e4016719 8
+examples/welcome-cards/package.json
+  f0405973e4016719 7-8
+package.json
+  f0405973e4016719 33,39
+examples/attachments/package.json
+  f0405973e4016719 7-8
+examples/support-bot/package.json
+  f0405973e4016719 7-8
+.github/workflows/ci.yml
+  f0405973e4016719 17,21-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "28d372755aec83522f2e099c02cda7c61b09b34e",
+  "prompts": {
+    "f0405973e4016719": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a8124fd-aac9-4beb-813c-1e79fd20d9f8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 18,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
