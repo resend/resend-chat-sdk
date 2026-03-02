@@ -3,6 +3,10 @@ import { ResendAdapter } from "../src/adapter.js";
 import { createResendAdapter } from "../src/index.js";
 import type { ResendAdapterConfig } from "../src/types.js";
 
+const NOT_SUPPORTED_PATTERN = /not implemented|not supported/i;
+const OPEN_DM_THREAD_PATTERN = /^resend:user@example\.com:[0-9a-f]{16}$/;
+const WEBHOOK_THREAD_PATTERN = /^resend:sender@example\.com:[0-9a-f]{16}$/;
+
 // Mock Resend SDK
 const mockSend = vi.fn().mockResolvedValue({
   data: { id: "re_sent_123" },
@@ -56,16 +60,16 @@ describe("ResendAdapter", () => {
       await adapter.initialize(mockChat);
     });
 
-    it("throws without API key", async () => {
+    it("throws without API key", () => {
       const noKeyAdapter = new ResendAdapter({
         ...config,
         apiKey: undefined,
       });
       const env = process.env.RESEND_API_KEY;
       process.env.RESEND_API_KEY = "";
-      await expect(
+      expect(() =>
         noKeyAdapter.initialize({ processMessage: vi.fn() })
-      ).rejects.toThrow();
+      ).toThrow();
       if (env) {
         process.env.RESEND_API_KEY = env;
       }
@@ -222,33 +226,33 @@ describe("ResendAdapter", () => {
   });
 
   describe("unsupported operations", () => {
-    it("editMessage throws", async () => {
-      await expect(
+    it("editMessage throws", () => {
+      expect(() =>
         adapter.editMessage("thread", "msg", { text: "edited" })
-      ).rejects.toThrow(/not implemented|not supported/i);
+      ).toThrow(NOT_SUPPORTED_PATTERN);
     });
 
-    it("deleteMessage throws", async () => {
-      await expect(adapter.deleteMessage("thread", "msg")).rejects.toThrow(
-        /not implemented|not supported/i
+    it("deleteMessage throws", () => {
+      expect(() => adapter.deleteMessage("thread", "msg")).toThrow(
+        NOT_SUPPORTED_PATTERN
       );
     });
 
-    it("addReaction throws", async () => {
-      await expect(
-        adapter.addReaction("thread", "msg", "thumbsup")
-      ).rejects.toThrow(/not implemented|not supported/i);
+    it("addReaction throws", () => {
+      expect(() => adapter.addReaction("thread", "msg", "thumbsup")).toThrow(
+        NOT_SUPPORTED_PATTERN
+      );
     });
 
-    it("removeReaction throws", async () => {
-      await expect(
-        adapter.removeReaction("thread", "msg", "thumbsup")
-      ).rejects.toThrow(/not implemented|not supported/i);
+    it("removeReaction throws", () => {
+      expect(() => adapter.removeReaction("thread", "msg", "thumbsup")).toThrow(
+        NOT_SUPPORTED_PATTERN
+      );
     });
 
-    it("startTyping throws", async () => {
-      await expect(adapter.startTyping("thread")).rejects.toThrow(
-        /not implemented|not supported/i
+    it("startTyping throws", () => {
+      expect(() => adapter.startTyping("thread")).toThrow(
+        NOT_SUPPORTED_PATTERN
       );
     });
   });
@@ -271,13 +275,13 @@ describe("ResendAdapter", () => {
   describe("openDM", () => {
     it("creates thread for email address", async () => {
       const threadId = await adapter.openDM("user@example.com");
-      expect(threadId).toMatch(/^resend:user@example\.com:[0-9a-f]{16}$/);
+      expect(threadId).toMatch(OPEN_DM_THREAD_PATTERN);
     });
   });
 
   describe("fetchThread", () => {
-    it("returns thread info", async () => {
-      const info = await adapter.fetchThread("resend:user@example.com:abc123");
+    it("returns thread info", () => {
+      const info = adapter.fetchThread("resend:user@example.com:abc123");
       expect(info.id).toBe("resend:user@example.com:abc123");
       expect(info.channelId).toBe("resend:user@example.com");
       expect(info.metadata.toAddress).toBe("user@example.com");
@@ -285,10 +289,8 @@ describe("ResendAdapter", () => {
   });
 
   describe("fetchMessages", () => {
-    it("returns empty result", async () => {
-      const result = await adapter.fetchMessages(
-        "resend:user@example.com:abc123"
-      );
+    it("returns empty result", () => {
+      const result = adapter.fetchMessages("resend:user@example.com:abc123");
       expect(result.messages).toEqual([]);
       expect(result.nextCursor).toBeUndefined();
     });
@@ -399,7 +401,7 @@ describe("ResendAdapter", () => {
         mockChat.processMessage.mock.calls[0];
 
       expect(adapterArg).toBe(adapter);
-      expect(threadIdArg).toMatch(/^resend:sender@example\.com:[0-9a-f]{16}$/);
+      expect(threadIdArg).toMatch(WEBHOOK_THREAD_PATTERN);
       expect(messageArg.id).toBe("re_webhook_123");
       expect(messageArg.text).toBe("Hello from webhook!");
       expect(messageArg.author.userId).toBe("sender@example.com");

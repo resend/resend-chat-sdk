@@ -109,5 +109,5 @@ export async function renderCard(card: CardNode): Promise<string> {
     </Html>
   );
 
-  return render(emailComponent);
+  return await render(emailComponent);
 }

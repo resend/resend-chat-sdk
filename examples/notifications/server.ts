@@ -46,7 +46,7 @@ const chat = new Chat({
 });
 
 // Log any inbound replies to notifications
-chat.onNewMention(async (_thread, message) => {
+chat.onNewMention((_thread, message) => {
   console.log(`[reply] from=${message.author.userId} text="${message.text}"`);
 });
 
