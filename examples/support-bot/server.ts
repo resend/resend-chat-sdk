@@ -2,9 +2,9 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { MemoryStateAdapter } from "@chat-adapter/state-memory";
-import { Chat } from "chat";
 import type { ResendRawMessage } from "@resend/chat-sdk-adapter";
 import { createResendAdapter } from "@resend/chat-sdk-adapter";
+import { Chat } from "chat";
 
 try {
   const env = readFileSync(".env", "utf-8");
