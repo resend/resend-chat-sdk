@@ -6,10 +6,13 @@ import {
   stripHtml,
 } from "../src/utils.js";
 
+const HEX_16_PATTERN = /^[0-9a-f]{16}$/;
+const MESSAGE_ID_PATTERN = /^<.+@example\.com>$/;
+
 describe("hashMessageId", () => {
   it("returns 16-char hex string", async () => {
     const hash = await hashMessageId("<abc123@mail.resend.dev>");
-    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+    expect(hash).toMatch(HEX_16_PATTERN);
   });
 
   it("returns same hash for same input", async () => {
@@ -48,7 +51,7 @@ describe("parseEmailAddress", () => {
 describe("generateMessageId", () => {
   it("produces valid Message-ID format", () => {
     const id = generateMessageId("bot@example.com");
-    expect(id).toMatch(/^<.+@example\.com>$/);
+    expect(id).toMatch(MESSAGE_ID_PATTERN);
   });
 
   it("generates unique IDs", () => {

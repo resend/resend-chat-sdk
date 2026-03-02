@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ThreadResolver } from "../src/thread-resolver.js";
 import type { ResendThreadId } from "../src/types.js";
 
+const THREAD_ID_PATTERN = /^resend:bot@example\.com:[0-9a-f]{16}$/;
+
 describe("ThreadResolver", () => {
   const resolver = new ThreadResolver();
 
@@ -43,7 +45,7 @@ describe("ThreadResolver", () => {
         inReplyTo: undefined,
         references: undefined,
       });
-      expect(threadId).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
+      expect(threadId).toMatch(THREAD_ID_PATTERN);
     });
 
     it("resolves to existing thread for reply", async () => {
@@ -135,7 +137,7 @@ describe("ThreadResolver", () => {
           '["<unknown1@mail.resend.dev>","<unknown2@mail.resend.dev>"]',
       });
 
-      expect(threadId).toMatch(/^resend:bot@example\.com:[0-9a-f]{16}$/);
+      expect(threadId).toMatch(THREAD_ID_PATTERN);
     });
 
     it("handles malformed JSON references by falling back to whitespace split", async () => {

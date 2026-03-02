@@ -2,6 +2,7 @@ import type { AdapterPostableMessage } from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
 import { Resend } from "resend";
+import type { CardNode } from "./card-renderer.js";
 import { ResendFormatConverter } from "./format-converter.js";
 import { parseInboundEmail } from "./message-parser.js";
 import { renderMessage } from "./message-renderer.js";
@@ -19,7 +20,7 @@ import {
 import { WebhookHandler } from "./webhook-handler.js";
 
 export interface ChatInstance {
-  processMessage(adapter: any, threadId: string, message: any): void;
+  processMessage(adapter: unknown, threadId: string, message: unknown): void;
 }
 
 class NotImplementedError extends Error {
@@ -59,7 +60,7 @@ export class ResendAdapter {
     return this.resend;
   }
 
-  async initialize(chat: ChatInstance): Promise<void> {
+  initialize(chat: ChatInstance): void {
     this.getResend();
     this.chat = chat;
 
@@ -134,22 +135,31 @@ export class ResendAdapter {
     const resend = this.getResend();
 
     // Normalize AdapterPostableMessage to { text?, formatted?, card? }
-    let normalized: { text?: string; formatted?: Root; card?: any };
+    let normalized: { text?: string; formatted?: Root; card?: CardNode };
     if (typeof message === "string") {
       normalized = { text: message };
     } else if ("markdown" in message) {
-      normalized = { text: (message as any).markdown };
+      normalized = {
+        text: (message as { markdown: string }).markdown,
+      };
     } else if ("raw" in message) {
-      normalized = { text: (message as any).raw };
+      normalized = { text: (message as { raw: string }).raw };
     } else if ("ast" in message) {
-      normalized = { formatted: (message as any).ast as Root };
+      normalized = {
+        formatted: (message as { ast: Root }).ast,
+      };
     } else if ("card" in message) {
-      normalized = { card: (message as any).card };
+      normalized = {
+        card: (message as { card: CardNode }).card,
+      };
     } else if ("type" in message) {
-      // CardElement directly
-      normalized = { card: message };
+      normalized = { card: message as CardNode };
     } else {
-      normalized = message as { text?: string; formatted?: Root; card?: any };
+      normalized = message as {
+        text?: string;
+        formatted?: Root;
+        card?: CardNode;
+      };
     }
 
     const decoded = this.threadResolver.decodeThreadId(threadId);
@@ -199,35 +209,27 @@ export class ResendAdapter {
     };
   }
 
-  async editMessage(
-    _threadId: string,
-    _messageId: string,
-    _message: any
-  ): Promise<never> {
+  editMessage(_threadId: string, _messageId: string, _message: unknown): never {
     throw new NotImplementedError("editMessage");
   }
 
-  async deleteMessage(_threadId: string, _messageId: string): Promise<never> {
+  deleteMessage(_threadId: string, _messageId: string): never {
     throw new NotImplementedError("deleteMessage");
   }
 
-  async addReaction(
-    _threadId: string,
-    _messageId: string,
-    _reaction: string
-  ): Promise<never> {
+  addReaction(_threadId: string, _messageId: string, _reaction: string): never {
     throw new NotImplementedError("addReaction");
   }
 
-  async removeReaction(
+  removeReaction(
     _threadId: string,
     _messageId: string,
     _reaction: string
-  ): Promise<never> {
+  ): never {
     throw new NotImplementedError("removeReaction");
   }
 
-  async startTyping(_threadId: string): Promise<never> {
+  startTyping(_threadId: string): never {
     throw new NotImplementedError("startTyping");
   }
 
@@ -246,11 +248,11 @@ export class ResendAdapter {
     return threadId;
   }
 
-  async fetchThread(threadId: string): Promise<{
+  fetchThread(threadId: string): {
     id: string;
     channelId: string;
     metadata: Record<string, unknown>;
-  }> {
+  } {
     const decoded = this.threadResolver.decodeThreadId(threadId);
     return {
       id: threadId,
@@ -262,9 +264,10 @@ export class ResendAdapter {
     };
   }
 
-  async fetchMessages(
-    _threadId: string
-  ): Promise<{ messages: any[]; nextCursor?: string }> {
+  fetchMessages(_threadId: string): {
+    messages: unknown[];
+    nextCursor?: string;
+  } {
     return { messages: [] };
   }
 
