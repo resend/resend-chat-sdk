@@ -1,0 +1,27 @@
+package.json
+  682751839bcb114b 2
+src/index.ts
+  682751839bcb114b 1
+README.md
+  682751839bcb114b 1,8,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "a8ad00cd3d7c3111aea177fbb25a6d2081cee3fb",
+  "prompts": {
+    "682751839bcb114b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88dd52b6-44dc-4faa-a40c-f93dc0ae4e35",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 5,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
