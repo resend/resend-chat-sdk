@@ -2,6 +2,7 @@ import type { AdapterPostableMessage } from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
 import { Resend } from "resend";
+import type { CardNode } from "./card-renderer.js";
 import { ResendFormatConverter } from "./format-converter.js";
 import { parseInboundEmail } from "./message-parser.js";
 import { renderMessage } from "./message-renderer.js";
@@ -134,7 +135,7 @@ export class ResendAdapter {
     const resend = this.getResend();
 
     // Normalize AdapterPostableMessage to { text?, formatted?, card? }
-    let normalized: { text?: string; formatted?: Root; card?: unknown };
+    let normalized: { text?: string; formatted?: Root; card?: CardNode };
     if (typeof message === "string") {
       normalized = { text: message };
     } else if ("markdown" in message) {
@@ -149,15 +150,15 @@ export class ResendAdapter {
       };
     } else if ("card" in message) {
       normalized = {
-        card: (message as { card: unknown }).card,
+        card: (message as { card: CardNode }).card,
       };
     } else if ("type" in message) {
-      normalized = { card: message };
+      normalized = { card: message as CardNode };
     } else {
       normalized = message as {
         text?: string;
         formatted?: Root;
-        card?: unknown;
+        card?: CardNode;
       };
     }
 
