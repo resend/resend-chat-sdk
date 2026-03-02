@@ -2,8 +2,8 @@
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:http";
-import { createResendAdapter } from "@chat-adapter/resend";
 import { MemoryStateAdapter } from "@chat-adapter/state-memory";
+import { createResendAdapter } from "@resend/chat-sdk-adapter";
 import { Chat } from "chat";
 
 try {
