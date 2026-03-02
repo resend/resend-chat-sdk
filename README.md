@@ -1,17 +1,17 @@
-# resend-chat-sdk
+# @resend/chat-sdk-adapter
 
 Vercel Chat SDK adapter for [Resend](https://resend.com) email. Bidirectional: receive emails via Resend webhooks, send emails via Resend API.
 
 ## Install
 
 ```bash
-npm install resend-chat-sdk chat @chat-adapter/shared
+npm install @resend/chat-sdk-adapter chat @chat-adapter/shared
 ```
 
 ## Quick Start
 
 ```ts
-import { createResendAdapter } from "resend-chat-sdk";
+import { createResendAdapter } from "@resend/chat-sdk-adapter";
 import { MemoryStateAdapter } from "@chat-adapter/state-memory";
 import { Chat } from "chat";
 

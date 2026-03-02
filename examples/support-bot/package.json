@@ -8,7 +8,7 @@
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "resend-chat-sdk": "file:../../resend-chat-sdk-0.1.0.tgz",
+    "@resend/chat-sdk-adapter": "file:../../resend-chat-sdk-adapter-0.1.0.tgz",
     "@chat-adapter/state-memory": "4.15.0",
     "chat": "4.15.0"
   },

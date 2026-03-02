@@ -1,4 +1,4 @@
-// resend-chat-sdk
+// @resend/chat-sdk-adapter
 
 export type { ChatInstance } from "./adapter.js";
 export { ResendAdapter } from "./adapter.js";
