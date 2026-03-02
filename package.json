@@ -42,7 +42,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "canary:enter": "changeset pre enter canary",
+    "canary:exit": "changeset pre exit",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "peerDependencies": {
     "@chat-adapter/shared": "^4.15.0",
@@ -57,6 +61,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
+    "@changesets/cli": "2.29.8",
+    "@changesets/pre": "2.0.2",
     "@chat-adapter/shared": "4.15.0",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.0.0",
