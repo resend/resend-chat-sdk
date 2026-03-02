@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npx tsx server.ts",
-    "typecheck": "npx tsc --noEmit"
+    "dev": "tsx server.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@chat-adapter/resend": "file:../../chat-adapter-resend-0.1.0.tgz",
