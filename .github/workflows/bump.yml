@@ -1,0 +1,29 @@
+name: Bump
+
+on:
+  push:
+    branches: [canary]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create version packages PR
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
