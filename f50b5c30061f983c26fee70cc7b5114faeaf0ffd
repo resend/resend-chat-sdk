@@ -1,0 +1,31 @@
+package.json
+  df68f1c070ed1b54 45-49
+.changeset/config.json
+  df68f1c070ed1b54 1-8
+.github/workflows/release.yml
+  df68f1c070ed1b54 1-34
+.github/workflows/bump.yml
+  df68f1c070ed1b54 1-29
+.changeset/README.md
+  df68f1c070ed1b54 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "f50b5c30061f983c26fee70cc7b5114faeaf0ffd",
+  "prompts": {
+    "df68f1c070ed1b54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2660382f-7918-4a2b-8c77-e1188c470cd6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 84,
+      "total_deletions": 1,
+      "accepted_lines": 84,
+      "overriden_lines": 0
+    }
+  }
+}
