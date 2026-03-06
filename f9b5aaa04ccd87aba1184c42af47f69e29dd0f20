@@ -1,0 +1,23 @@
+README.md
+  28ca089320553a4a 127-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "f9b5aaa04ccd87aba1184c42af47f69e29dd0f20",
+  "prompts": {
+    "28ca089320553a4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8372f10-bac2-4e5e-a828-51b5db2a6ce4",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
