@@ -124,6 +124,10 @@ Email is inherently one-shot. The following operations throw `NotImplementedErro
 | [support-bot](./examples/support-bot) | Multi-turn support with subscribe/unsubscribe |
 | [attachments](./examples/attachments) | Detects attachments and replies with a summary |
 
+## Documentation
+
+Official docs available at [resend.com/docs/chat-sdk](https://resend.com/docs/chat-sdk).
+
 ## License
 
 MIT
