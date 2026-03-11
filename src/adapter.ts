@@ -60,13 +60,19 @@ export class ResendAdapter {
     return this.resend;
   }
 
-  initialize(chat: ChatInstance): void {
-    this.getResend();
-    this.chat = chat;
+  initialize(chat: ChatInstance): Promise<void> {
+    try {
+      this.getResend();
+      this.chat = chat;
 
-    const webhookSecret =
-      this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
-    this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
+      const webhookSecret =
+        this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
+      this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
+
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   encodeThreadId(id: ResendThreadId): string {
@@ -253,27 +259,31 @@ export class ResendAdapter {
     return threadId;
   }
 
-  fetchThread(threadId: string): {
+  fetchThread(threadId: string): Promise<{
     id: string;
     channelId: string;
     metadata: Record<string, unknown>;
-  } {
-    const decoded = this.threadResolver.decodeThreadId(threadId);
-    return {
-      id: threadId,
-      channelId: this.channelIdFromThreadId(threadId),
-      metadata: {
-        title: `Conversation with ${decoded.toAddress}`,
-        toAddress: decoded.toAddress,
-      },
-    };
+  }> {
+    try {
+      const decoded = this.threadResolver.decodeThreadId(threadId);
+      return Promise.resolve({
+        id: threadId,
+        channelId: this.channelIdFromThreadId(threadId),
+        metadata: {
+          title: `Conversation with ${decoded.toAddress}`,
+          toAddress: decoded.toAddress,
+        },
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
-  fetchMessages(_threadId: string): {
-    messages: unknown[];
+  fetchMessages(_threadId: string): Promise<{
+    messages: Message<ResendRawMessage>[];
     nextCursor?: string;
-  } {
-    return { messages: [] };
+  }> {
+    return Promise.resolve({ messages: [] });
   }
 
   parseMessage(raw: ResendRawMessage): Message<ResendRawMessage> {
