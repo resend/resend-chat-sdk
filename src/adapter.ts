@@ -77,6 +77,11 @@ export class ResendAdapter {
     return this.threadResolver.decodeThreadId(threadId);
   }
 
+  channelIdFromThreadId(threadId: string): string {
+    const { toAddress } = this.decodeThreadId(threadId);
+    return `resend:${toAddress}`;
+  }
+
   async handleWebhook(request: Request): Promise<Response> {
     if (!(this.webhookHandler && this.chat)) {
       throw new Error("Adapter not initialized. Call initialize() first.");
@@ -256,7 +261,7 @@ export class ResendAdapter {
     const decoded = this.threadResolver.decodeThreadId(threadId);
     return {
       id: threadId,
-      channelId: `resend:${decoded.toAddress}`,
+      channelId: this.channelIdFromThreadId(threadId),
       metadata: {
         title: `Conversation with ${decoded.toAddress}`,
         toAddress: decoded.toAddress,

@@ -86,6 +86,17 @@ describe("ResendAdapter", () => {
       expect(decoded.toAddress).toBe("bot@example.com");
       expect(decoded.rootMessageIdHash).toBe("abcdef0123456789");
     });
+
+    it("derives a stable channel ID from a thread ID", () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      expect(adapter.channelIdFromThreadId(threadId)).toBe(
+        "resend:user@example.com"
+      );
+      expect(adapter.fetchThread(threadId).channelId).toBe(
+        adapter.channelIdFromThreadId(threadId)
+      );
+    });
   });
 
   describe("postMessage", () => {

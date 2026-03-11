@@ -34,8 +34,8 @@ importers:
         specifier: 2.0.2
         version: 2.0.2
       '@chat-adapter/shared':
-        specifier: 4.15.0
-        version: 4.15.0
+        specifier: 4.20.0
+        version: 4.20.0
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -46,8 +46,8 @@ importers:
         specifier: ^19.2.14
         version: 19.2.14
       chat:
-        specifier: 4.15.0
-        version: 4.15.0
+        specifier: 4.20.0
+        version: 4.20.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -179,8 +179,8 @@ packages:
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
 
-  '@chat-adapter/shared@4.15.0':
-    resolution: {integrity: sha512-otIS9zf0wY3DMc5WGK1sOJiASSeMHcdEqmuxDWW/6tK7gdRE7FOVE+dfo/74ykj9QZwv+a9cByh1cimaeHbiAw==}
+  '@chat-adapter/shared@4.20.0':
+    resolution: {integrity: sha512-PaN3TADZUswD5VNV5qMS5M316PP9hp14lGHNa5SB8s7LN5PGXuXUroO0e7rjyo18i7jNKsalJUjpD/uoEg0u3Q==}
 
   '@clack/core@1.0.1':
     resolution: {integrity: sha512-WKeyK3NOBwDOzagPR5H08rFk9D/WuN705yEbuZvKqlkmoLM2woKtXb10OO2k1NoSU4SFG947i2/SCYh+2u5e4g==}
@@ -809,8 +809,8 @@ packages:
   chardet@2.1.1:
     resolution: {integrity: sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ==}
 
-  chat@4.15.0:
-    resolution: {integrity: sha512-fE1m3UEiKQoiYkhXWT0rpH1+ZhKqJGZYkS+1gNCZWNkLv0QWTZhzdzBM5qYWe5A/Y0wJ8yLVjaqvGO4zZFxZqg==}
+  chat@4.20.0:
+    resolution: {integrity: sha512-9/SvX0wM1AZa7VyibyVjRkb3WsbmSbIm54i1MMtzFQEj96oAisFdxkRoBKQDZ4R9tfLe7f6SOwWIHqwCGaCxoA==}
 
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
@@ -1356,6 +1356,9 @@ packages:
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
 
+  remend@1.2.2:
+    resolution: {integrity: sha512-4ZJgIB9EG9fQE41mOJCRHMmnxDTKHWawQoJWZyUbZuj680wVyogu2ihnj8Edqm7vh2mo/TWHyEZpn2kqeDvS7w==}
+
   resend@6.9.2:
     resolution: {integrity: sha512-uIM6CQ08tS+hTCRuKBFbOBvHIGaEhqZe8s4FOgqsVXSbQLAhmNWpmUhG3UAtRnmcwTWFUqnHa/+Vux8YGPyDBA==}
     engines: {node: '>=20'}
@@ -1817,9 +1820,9 @@ snapshots:
       human-id: 4.1.3
       prettier: 2.8.8
 
-  '@chat-adapter/shared@4.15.0':
+  '@chat-adapter/shared@4.20.0':
     dependencies:
-      chat: 4.15.0
+      chat: 4.20.0
     transitivePeerDependencies:
       - supports-color
 
@@ -2286,13 +2289,14 @@ snapshots:
 
   chardet@2.1.1: {}
 
-  chat@4.15.0:
+  chat@4.20.0:
     dependencies:
       '@workflow/serde': 4.1.0-beta.2
       mdast-util-to-string: 4.0.0
       remark-gfm: 4.0.1
       remark-parse: 11.0.0
       remark-stringify: 11.0.0
+      remend: 1.2.2
       unified: 11.0.5
     transitivePeerDependencies:
       - supports-color
@@ -3013,6 +3017,8 @@ snapshots:
       '@types/mdast': 4.0.4
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
+
+  remend@1.2.2: {}
 
   resend@6.9.2(@react-email/render@2.0.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
