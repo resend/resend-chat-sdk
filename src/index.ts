@@ -11,8 +11,13 @@ export type {
   ResendWebhookPayload,
 } from "./types.js";
 
+import type { Adapter } from "chat";
 import { ResendAdapter } from "./adapter.js";
-import type { ResendAdapterConfig } from "./types.js";
+import type {
+  ResendAdapterConfig,
+  ResendRawMessage,
+  ResendThreadId,
+} from "./types.js";
 
 /**
  * Create a new Resend adapter instance.
@@ -21,5 +26,10 @@ import type { ResendAdapterConfig } from "./types.js";
 export function createResendAdapter(
   config: ResendAdapterConfig
 ): ResendAdapter {
-  return new ResendAdapter(config);
+  const adapter = new ResendAdapter(config) satisfies Adapter<
+    ResendThreadId,
+    ResendRawMessage
+  >;
+
+  return adapter;
 }

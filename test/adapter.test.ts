@@ -60,16 +60,16 @@ describe("ResendAdapter", () => {
       await adapter.initialize(mockChat);
     });
 
-    it("throws without API key", () => {
+    it("throws without API key", async () => {
       const noKeyAdapter = new ResendAdapter({
         ...config,
         apiKey: undefined,
       });
       const env = process.env.RESEND_API_KEY;
       process.env.RESEND_API_KEY = "";
-      expect(() =>
+      await expect(
         noKeyAdapter.initialize({ processMessage: vi.fn() })
-      ).toThrow();
+      ).rejects.toThrow();
       if (env) {
         process.env.RESEND_API_KEY = env;
       }
@@ -85,6 +85,29 @@ describe("ResendAdapter", () => {
       const decoded = adapter.decodeThreadId(encoded);
       expect(decoded.toAddress).toBe("bot@example.com");
       expect(decoded.rootMessageIdHash).toBe("abcdef0123456789");
+    });
+
+    it("derives a stable channel ID from a thread ID", async () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      expect(adapter.channelIdFromThreadId(threadId)).toBe(
+        "resend:user@example.com"
+      );
+      await expect(adapter.fetchThread(threadId)).resolves.toMatchObject({
+        channelId: adapter.channelIdFromThreadId(threadId),
+      });
+    });
+  });
+
+  describe("adapter compatibility", () => {
+    it("creates an adapter instance accepted by Chat", () => {
+      const resend = createResendAdapter({ fromAddress: "bot@example.com" });
+
+      expect(resend).toBeInstanceOf(ResendAdapter);
+      // Type-level coverage lives in createResendAdapter() via `satisfies Adapter`.
+      expect(
+        resend.channelIdFromThreadId("resend:user@example.com:abc123")
+      ).toBe("resend:user@example.com");
     });
   });
 
@@ -280,8 +303,8 @@ describe("ResendAdapter", () => {
   });
 
   describe("fetchThread", () => {
-    it("returns thread info", () => {
-      const info = adapter.fetchThread("resend:user@example.com:abc123");
+    it("returns thread info", async () => {
+      const info = await adapter.fetchThread("resend:user@example.com:abc123");
       expect(info.id).toBe("resend:user@example.com:abc123");
       expect(info.channelId).toBe("resend:user@example.com");
       expect(info.metadata.toAddress).toBe("user@example.com");
@@ -289,8 +312,10 @@ describe("ResendAdapter", () => {
   });
 
   describe("fetchMessages", () => {
-    it("returns empty result", () => {
-      const result = adapter.fetchMessages("resend:user@example.com:abc123");
+    it("returns empty result", async () => {
+      const result = await adapter.fetchMessages(
+        "resend:user@example.com:abc123"
+      );
       expect(result.messages).toEqual([]);
       expect(result.nextCursor).toBeUndefined();
     });
