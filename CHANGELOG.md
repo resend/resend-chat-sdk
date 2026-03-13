@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- 7a49c56: Add `channelIdFromThreadId()` and align the adapter's async method signatures with the current Chat SDK contract.
+
 ## 0.1.0 (2025-02-27)
 
 Initial release.
