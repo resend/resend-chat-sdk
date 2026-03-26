@@ -1,3 +1,4 @@
+import { type StateAdapter, ThreadImpl } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendAdapter } from "../src/adapter.js";
 import { createResendAdapter } from "../src/index.js";
@@ -34,6 +35,37 @@ const config: ResendAdapterConfig = {
   fromAddress: "bot@example.com",
   fromName: "Test Bot",
 };
+
+function createStateAdapter(): StateAdapter {
+  return {
+    acquireLock: async () => null,
+    appendToList: async () => undefined,
+    connect: async () => undefined,
+    delete: async () => undefined,
+    disconnect: async () => undefined,
+    extendLock: async () => true,
+    forceReleaseLock: async () => undefined,
+    get: async () => null,
+    getList: async () => [],
+    isSubscribed: async () => false,
+    releaseLock: async () => undefined,
+    set: async () => undefined,
+    setIfNotExists: async () => true,
+    subscribe: async () => undefined,
+    unsubscribe: async () => undefined,
+  };
+}
+
+function createStreamingThread(adapter: ResendAdapter): ThreadImpl {
+  return new ThreadImpl({
+    id: "resend:user@example.com:abcdef0123456789",
+    channelId: "user@example.com",
+    adapter,
+    stateAdapter: createStateAdapter(),
+    isDM: true,
+    streamingUpdateIntervalMs: 10,
+  });
+}
 
 describe("ResendAdapter", () => {
   let adapter: ResendAdapter;
@@ -163,7 +195,25 @@ describe("ResendAdapter", () => {
       });
       expect(mockSend).toHaveBeenCalledWith(
         expect.objectContaining({
-          html: expect.stringContaining("bold"),
+          html: expect.stringContaining("<strong>bold</strong>"),
+          text: "bold",
+        })
+      );
+    });
+
+    it("passes plain string content through without markdown conversion", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        "**literal**"
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "**literal**",
+          html: "<p>**literal**</p>",
         })
       );
     });
@@ -245,6 +295,128 @@ describe("ResendAdapter", () => {
           text: "Hello",
         })
       ).rejects.toThrow("Rate limited");
+    });
+
+    it("buffers streamed content and sends a single final email", async () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      let releaseSecondChunk!: () => void;
+      const secondChunkGate = new Promise<void>((resolve) => {
+        releaseSecondChunk = resolve;
+      });
+
+      const stream = (async function* () {
+        yield "First part";
+        await secondChunkGate;
+        yield " second part";
+      })();
+
+      const postPromise = adapter.stream(threadId, stream);
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(mockSend).not.toHaveBeenCalled();
+
+      releaseSecondChunk();
+
+      const sent = await postPromise;
+
+      expect(sent.raw.text).toBe("First part second part");
+      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "First part second part",
+        })
+      );
+    });
+
+    it("preserves fullStream step separators before sending the email", async () => {
+      const thread = createStreamingThread(adapter);
+
+      const fullStreamLike = (async function* () {
+        await Promise.resolve();
+        yield { type: "text-delta", textDelta: "First step." };
+        yield { type: "step-finish" };
+        yield { type: "text-delta", textDelta: "Second step." };
+      })();
+
+      await thread.post(fullStreamLike as AsyncIterable<any>);
+
+      expect(mockSend).toHaveBeenCalledOnce();
+      const payload = mockSend.mock.calls[0]?.[0];
+      expect(payload?.text).toContain("First step.");
+      expect(payload?.text).toContain("Second step.");
+      expect(payload?.html).toContain("<p>First step.</p>");
+      expect(payload?.html).toContain("<p>Second step.</p>");
+    });
+
+    it("uses markdown_text chunks and ignores non-text structured chunks", async () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      const structuredStream = (async function* () {
+        await Promise.resolve();
+        yield { type: "markdown_text", text: "Searching..." };
+        yield {
+          type: "task_update",
+          id: "search-1",
+          title: "Searching documents",
+          status: "in_progress",
+        };
+        yield { type: "markdown_text", text: " done." };
+      })();
+
+      const sent = await adapter.stream(
+        threadId,
+        structuredStream as AsyncIterable<any>
+      );
+
+      expect(sent.raw.text).toBe("Searching... done.");
+      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Searching... done.",
+        })
+      );
+    });
+
+    it("derives a plain-text body from streamed markdown content", async () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      const markdownStream = (async function* () {
+        await Promise.resolve();
+        yield "**bold**";
+      })();
+
+      await adapter.stream(threadId, markdownStream);
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: expect.stringContaining("<strong>bold</strong>"),
+          text: "bold",
+        })
+      );
+    });
+
+    it("throws when a stream contains only unsupported structured chunks", async () => {
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      const structuredOnlyStream = (async function* () {
+        await Promise.resolve();
+        yield {
+          type: "task_update",
+          id: "search-1",
+          title: "Searching documents",
+          status: "in_progress",
+        };
+        yield {
+          type: "plan_update",
+          title: "Search complete",
+        };
+      })();
+
+      await expect(
+        adapter.stream(threadId, structuredOnlyStream as AsyncIterable<any>)
+      ).rejects.toThrow("no textual content");
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 
