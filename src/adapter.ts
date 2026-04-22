@@ -1,4 +1,4 @@
-import type { AdapterPostableMessage } from "chat";
+import type { AdapterPostableMessage, StreamChunk, StreamOptions } from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
 import { Resend } from "resend";
@@ -145,7 +145,7 @@ export class ResendAdapter {
       normalized = { text: message };
     } else if ("markdown" in message) {
       normalized = {
-        text: (message as { markdown: string }).markdown,
+        formatted: parseMarkdown((message as { markdown: string }).markdown),
       };
     } else if ("raw" in message) {
       normalized = { text: (message as { raw: string }).raw };
@@ -212,6 +212,33 @@ export class ResendAdapter {
       },
       threadId,
     };
+  }
+
+  async stream(
+    threadId: string,
+    textStream: AsyncIterable<string | StreamChunk>,
+    _options?: StreamOptions
+  ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
+    let markdown = "";
+
+    for await (const chunk of textStream) {
+      if (typeof chunk === "string") {
+        markdown += chunk;
+        continue;
+      }
+
+      if (chunk.type === "markdown_text") {
+        markdown += chunk.text;
+      }
+    }
+
+    if (!markdown) {
+      throw new Error(
+        "Resend adapter received a stream with no textual content (no string or markdown_text chunks). Email requires text; ensure your stream produces at least one text delta, or handle empty completions before calling thread.post()."
+      );
+    }
+
+    return this.postMessage(threadId, { markdown });
   }
 
   editMessage(_threadId: string, _messageId: string, _message: unknown): never {
