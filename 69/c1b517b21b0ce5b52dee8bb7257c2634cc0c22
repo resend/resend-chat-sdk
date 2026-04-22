@@ -1,0 +1,27 @@
+src/adapter.ts
+  ea85ea791e2f408c 1-6,28-33,95-98,144
+.changeset/forward-webhook-options.md
+  ea85ea791e2f408c 1-11
+test/adapter.test.ts
+  ea85ea791e2f408c 607-655
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "69c1b517b21b0ce5b52dee8bb7257c2634cc0c22",
+  "prompts": {
+    "ea85ea791e2f408c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ee4233e-accd-40c9-a04e-ff3541c689aa",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "João Melo",
+      "messages": [],
+      "total_additions": 77,
+      "total_deletions": 4,
+      "accepted_lines": 77,
+      "overriden_lines": 0
+    }
+  }
+}
