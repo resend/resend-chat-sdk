@@ -1,0 +1,27 @@
+src/card-renderer.tsx
+  b23bdaa40f86ef53 1,11,14
+.changeset/upgrade-react-email-6.md
+  b23bdaa40f86ef53 1-5
+package.json
+  b23bdaa40f86ef53 35,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "386ff015f268dd4fafa6994b7aa6acaa9ad01270",
+  "prompts": {
+    "b23bdaa40f86ef53": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3a465433-d23d-434c-b351-34c438edc3e4",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "João Melo",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 6,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
