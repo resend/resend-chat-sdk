@@ -1,8 +1,4 @@
-import type {
-  AdapterPostableMessage,
-  StreamChunk,
-  StreamOptions,
-} from "chat";
+import type { AdapterPostableMessage, StreamChunk, StreamOptions } from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
 import { Resend } from "resend";
