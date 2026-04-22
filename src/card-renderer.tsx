@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Body,
   Button,
@@ -7,11 +8,10 @@ import {
   Html,
   Img,
   Link,
+  render,
   Section,
   Text,
-} from "@react-email/components";
-import { render } from "@react-email/render";
-import React from "react";
+} from "react-email";
 
 /**
  * Matches the Chat SDK CardElement / CardChild shapes.
