@@ -1,4 +1,9 @@
-import type { AdapterPostableMessage, StreamChunk, StreamOptions } from "chat";
+import type {
+  AdapterPostableMessage,
+  StreamChunk,
+  StreamOptions,
+  WebhookOptions,
+} from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
 import { Resend } from "resend";
@@ -20,7 +25,12 @@ import {
 import { WebhookHandler } from "./webhook-handler.js";
 
 export interface ChatInstance {
-  processMessage(adapter: unknown, threadId: string, message: unknown): void;
+  processMessage(
+    adapter: unknown,
+    threadId: string,
+    message: unknown,
+    options?: WebhookOptions
+  ): void;
 }
 
 class NotImplementedError extends Error {
@@ -82,7 +92,10 @@ export class ResendAdapter {
     return `resend:${toAddress}`;
   }
 
-  async handleWebhook(request: Request): Promise<Response> {
+  async handleWebhook(
+    request: Request,
+    options?: WebhookOptions
+  ): Promise<Response> {
     if (!(this.webhookHandler && this.chat)) {
       throw new Error("Adapter not initialized. Call initialize() first.");
     }
@@ -128,7 +141,7 @@ export class ResendAdapter {
     this.threadResolver.trackSubject(threadId, email.subject);
 
     const parsed = parseInboundEmail(email, threadId, this.config.fromAddress);
-    await this.chat.processMessage(this, threadId, parsed);
+    this.chat.processMessage(this, threadId, parsed, options);
 
     return new Response(null, { status: 200 });
   }
