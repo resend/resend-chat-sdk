@@ -604,5 +604,54 @@ describe("ResendAdapter", () => {
       expect(messageArg.author.userId).toBe("sender@example.com");
       expect(messageArg.raw.subject).toBe("Test webhook email");
     });
+
+    it("forwards WebhookOptions (waitUntil) to chat.processMessage", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      const webhookPayload = {
+        type: "email.received",
+        created_at: "2025-01-15T10:30:00Z",
+        data: {
+          email_id: "re_webhook_456",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Another webhook email",
+          message_id: "<webhook-msg-2@mail.resend.dev>",
+        },
+      };
+
+      const fullEmail = {
+        id: "re_webhook_456",
+        from: "sender@example.com",
+        to: ["bot@example.com"],
+        subject: "Another webhook email",
+        message_id: "<webhook-msg-2@mail.resend.dev>",
+        text: "Hello again!",
+        html: "<p>Hello again!</p>",
+        headers: {},
+        created_at: "2025-01-15T10:30:00Z",
+      };
+
+      mockVerify.mockReturnValue(webhookPayload);
+      mockReceivingGet.mockResolvedValue({ data: fullEmail });
+
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: {
+          "svix-id": "msg_456",
+          "svix-timestamp": "12345",
+          "svix-signature": "v1,valid",
+        },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      const waitUntil = vi.fn();
+      await adapter.handleWebhook(request, { waitUntil });
+
+      expect(mockChat.processMessage).toHaveBeenCalledOnce();
+      const optionsArg = mockChat.processMessage.mock.calls[0][3];
+      expect(optionsArg).toEqual({ waitUntil });
+    });
   });
 });
