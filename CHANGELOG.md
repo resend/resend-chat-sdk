@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- cb1a144: Forward `WebhookOptions` through `ResendAdapter.handleWebhook` to `chat.processMessage`. `processMessage` is fire-and-forget, so on serverless platforms (e.g. Vercel Functions) the function would return 200 before the detached task finished — inbound emails were acknowledged but never processed. Callers can now pass `waitUntil` to keep the runtime alive until processing completes:
+
+  ```ts
+  import { after } from "next/server";
+
+  adapter.handleWebhook(request, { waitUntil: (p) => after(() => p) });
+  ```
+
 ## 0.2.1
 
 ### Patch Changes
