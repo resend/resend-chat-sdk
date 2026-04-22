@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- 714f08d: Upgrade to `react-email@^6.0.0`. Replaces `@react-email/components` and `@react-email/render` with the unified `react-email` package. Bumps minimum Node to `>=20` (required by react-email 6).
+
 ## 0.1.1
 
 ### Patch Changes
