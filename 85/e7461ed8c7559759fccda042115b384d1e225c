@@ -1,0 +1,23 @@
+src/adapter.ts
+  9a75bec48aad65ea 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "85e7461ed8c7559759fccda042115b384d1e225c",
+  "prompts": {
+    "9a75bec48aad65ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04bf913b-9195-4031-8642-40c24853747c",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "João Melo",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 5,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
