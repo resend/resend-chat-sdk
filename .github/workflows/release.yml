@@ -8,7 +8,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-22.04-2
     permissions:
       contents: write
       pull-requests: write
