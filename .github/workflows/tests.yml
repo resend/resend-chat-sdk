@@ -13,6 +13,7 @@ permissions:
 jobs:
   tests:
     runs-on: depot-ubuntu-22.04-4
+    timeout-minutes: 30
     strategy:
       matrix:
         node-version: [18, 22, 24]
@@ -22,9 +23,9 @@ jobs:
         with:
           fetch-depth: 1
       - name: pnpm setup
-        uses: pnpm/action-setup@1e1c8eafbd745f64b1ef30a7d7ed7965034c486c
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
