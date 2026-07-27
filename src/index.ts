@@ -4,11 +4,13 @@ export type { ChatInstance } from "./adapter.js";
 export { ResendAdapter } from "./adapter.js";
 export type {
   ResendAdapterConfig,
+  ResendApiKey,
   ResendAttachment,
   ResendRawMessage,
   ResendReceivedEmail,
   ResendThreadId,
   ResendWebhookPayload,
+  ResendWebhookVerifier,
 } from "./types.js";
 
 import type { Adapter } from "chat";

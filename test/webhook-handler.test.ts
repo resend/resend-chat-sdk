@@ -56,6 +56,50 @@ describe("WebhookHandler", () => {
       expect(result.event).toBeNull();
     });
 
+    it("accepts a custom verifier and parses the original body", async () => {
+      const payload = {
+        type: "email.received",
+        created_at: "2025-01-01T00:00:00Z",
+        data: {
+          email_id: "re_forwarded",
+          from: "user@example.com",
+          to: ["bot@example.com"],
+          subject: "Forwarded",
+          message_id: "<forwarded@mail.resend.dev>",
+        },
+      };
+      const verifier = vi.fn().mockResolvedValue(true);
+      handler = new WebhookHandler(mockResend as any, "", verifier);
+      const body = JSON.stringify(payload);
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        body,
+      });
+
+      const result = await handler.parseWebhookRequest(request);
+
+      expect(verifier).toHaveBeenCalledWith(request, body);
+      expect(mockVerify).not.toHaveBeenCalled();
+      expect(result.event?.data.email_id).toBe("re_forwarded");
+    });
+
+    it("rejects a falsy custom verifier result", async () => {
+      handler = new WebhookHandler(
+        mockResend as any,
+        "",
+        vi.fn().mockResolvedValue(false)
+      );
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        body: JSON.stringify({ type: "email.received", data: {} }),
+      });
+
+      await expect(handler.parseWebhookRequest(request)).resolves.toEqual({
+        status: 401,
+        event: null,
+      });
+    });
+
     it("returns parsed event for email.received", async () => {
       const payload = {
         type: "email.received",

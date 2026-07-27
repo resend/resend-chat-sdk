@@ -1,5 +1,9 @@
 import type { Resend } from "resend";
-import type { ResendReceivedEmail, ResendWebhookPayload } from "./types.js";
+import type {
+  ResendReceivedEmail,
+  ResendWebhookPayload,
+  ResendWebhookVerifier,
+} from "./types.js";
 
 interface WebhookResult {
   event: ResendWebhookPayload | null;
@@ -9,7 +13,8 @@ interface WebhookResult {
 export class WebhookHandler {
   constructor(
     private readonly resend: Resend,
-    private readonly webhookSecret: string
+    private readonly webhookSecret: string,
+    private readonly webhookVerifier?: ResendWebhookVerifier
   ) {}
 
   async parseWebhookRequest(request: Request): Promise<WebhookResult> {
@@ -20,15 +25,23 @@ export class WebhookHandler {
 
     let payload: Record<string, unknown>;
     try {
-      payload = this.resend.webhooks.verify({
-        payload: body,
-        headers: {
-          id: svixId,
-          timestamp: svixTimestamp,
-          signature: svixSignature,
-        },
-        webhookSecret: this.webhookSecret,
-      }) as unknown as Record<string, unknown>;
+      if (this.webhookVerifier) {
+        const verified = await this.webhookVerifier(request, body);
+        if (!verified) {
+          return { status: 401, event: null };
+        }
+        payload = JSON.parse(body) as Record<string, unknown>;
+      } else {
+        payload = this.resend.webhooks.verify({
+          payload: body,
+          headers: {
+            id: svixId,
+            timestamp: svixTimestamp,
+            signature: svixSignature,
+          },
+          webhookSecret: this.webhookSecret,
+        }) as unknown as Record<string, unknown>;
+      }
     } catch {
       return { status: 401, event: null };
     }
