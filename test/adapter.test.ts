@@ -281,6 +281,107 @@ describe("ResendAdapter", () => {
       );
     });
 
+    // ── BCC / CC (#43) ─────────────────────────────────────────────────────
+
+    it("no defaults, no per-message → no bcc/cc field sent", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        text: "Hello",
+      });
+
+      const payload = mockSend.mock.calls[0]?.[0];
+      expect(payload).not.toHaveProperty("bcc");
+      expect(payload).not.toHaveProperty("cc");
+    });
+
+    it("config defaultBcc / defaultCc are applied when per-message omits them", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+        defaultCc: ["audit@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        { markdown: "hi" }
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bcc: ["observer@example.com"],
+          cc: ["audit@example.com"],
+        })
+      );
+    });
+
+    it("per-message bcc / cc override config defaults (do not merge)", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+        defaultCc: ["audit@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        {
+          markdown: "hi",
+          bcc: ["ops@example.com"],
+          cc: ["ceo@example.com"],
+        } as unknown as Parameters<typeof withDefaults.postMessage>[1]
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bcc: ["ops@example.com"],
+          cc: ["ceo@example.com"],
+        })
+      );
+    });
+
+    it("explicit empty per-message array suppresses the config default", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        {
+          markdown: "hi",
+          bcc: [],
+        } as unknown as Parameters<typeof withDefaults.postMessage>[1]
+      );
+
+      const payload = mockSend.mock.calls[0]?.[0];
+      expect(payload).not.toHaveProperty("bcc");
+    });
+
+    it("bcc / cc are echoed on the returned raw.bcc / raw.cc", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+        defaultCc: ["audit@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      const result = await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        { markdown: "hi" }
+      );
+
+      expect(result.raw.bcc).toEqual(["observer@example.com"]);
+      expect(result.raw.cc).toEqual(["audit@example.com"]);
+    });
+
     it("throws when Resend API returns an error", async () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);

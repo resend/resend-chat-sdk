@@ -5,6 +5,7 @@ export { ResendAdapter } from "./adapter.js";
 export type {
   ResendAdapterConfig,
   ResendAttachment,
+  ResendPostExtensions,
   ResendRawMessage,
   ResendReceivedEmail,
   ResendThreadId,

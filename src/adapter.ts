@@ -193,6 +193,25 @@ export class ResendAdapter {
     const storedSubject = this.threadResolver.getSubject(threadId);
     const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
 
+    // Per-message BCC / CC — optional on any AdapterPostableMessage object
+    // shape (see `ResendPostExtensions` in ./types.ts). When present they
+    // OVERRIDE the corresponding `defaultBcc` / `defaultCc` on the adapter
+    // config (do not merge) — an explicit empty array is a valid signal to
+    // suppress the default for a single call. Only non-empty final values
+    // reach `resend.emails.send`; if neither the per-message nor the config
+    // sets a value, we don't pass the field at all (byte-for-byte
+    // compatible with the pre-#43 behavior).
+    const perMsgBcc =
+      typeof message === "object" && message !== null && "bcc" in message
+        ? (message as { bcc?: string[] }).bcc
+        : undefined;
+    const perMsgCc =
+      typeof message === "object" && message !== null && "cc" in message
+        ? (message as { cc?: string[] }).cc
+        : undefined;
+    const bcc = perMsgBcc !== undefined ? perMsgBcc : this.config.defaultBcc;
+    const cc = perMsgCc !== undefined ? perMsgCc : this.config.defaultCc;
+
     const response = await resend.emails.send({
       from: fromHeader,
       to: [decoded.toAddress],
@@ -200,6 +219,8 @@ export class ResendAdapter {
       html: rendered.html,
       text: rendered.text,
       ...(headers && { headers }),
+      ...(bcc && bcc.length > 0 && { bcc }),
+      ...(cc && cc.length > 0 && { cc }),
     });
 
     if (response.error || !response.data) {
@@ -222,6 +243,8 @@ export class ResendAdapter {
         html: rendered.html,
         headers: headers || {},
         createdAt: new Date().toISOString(),
+        ...(bcc && bcc.length > 0 && { bcc }),
+        ...(cc && cc.length > 0 && { cc }),
       },
       threadId,
     };
