@@ -101,6 +101,17 @@ If neither the config nor the message specifies `bcc`/`cc`, the adapter
 does not pass those fields to Resend (byte-for-byte compatible with
 adapters that predate this feature).
 
+**Streamed sends** (`thread.post(asyncIterable)` — see [Streaming](#streaming))
+run through the same `postMessage` path with only the buffered `{ markdown }`
+in hand; there is no per-call `bcc`/`cc` override for streams. Set the addresses
+via `defaultBcc` / `defaultCc` on the adapter config to apply them uniformly
+to streamed sends.
+
+**Runtime safety.** TypeScript enforces `string[]` on both `bcc` and `cc`,
+but plain-JS callers can slip other shapes through. Malformed values (a
+bare string, `null`, an array containing non-strings) are ignored — the
+config default takes over instead of forwarding garbage to Resend.
+
 ### Email Threading
 
 Threads are resolved using standard `Message-ID`, `In-Reply-To`, and `References` email headers. Reply chains are automatically grouped into Chat SDK threads.

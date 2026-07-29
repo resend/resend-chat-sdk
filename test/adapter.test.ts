@@ -382,6 +382,71 @@ describe("ResendAdapter", () => {
       expect(result.raw.cc).toEqual(["audit@example.com"]);
     });
 
+    it("malformed per-message bcc (string instead of array) falls back to config default", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        {
+          markdown: "hi",
+          // TS would refuse this; JS callers can slip it through.
+          bcc: "observer@example.com",
+        } as unknown as Parameters<typeof withDefaults.postMessage>[1]
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ bcc: ["observer@example.com"] })
+      );
+    });
+
+    it("malformed per-message bcc (array with non-string) falls back to config default", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        {
+          markdown: "hi",
+          bcc: [42],
+        } as unknown as Parameters<typeof withDefaults.postMessage>[1]
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ bcc: ["observer@example.com"] })
+      );
+    });
+
+    it("null per-message bcc falls back to config default (not treated as explicit-suppress)", async () => {
+      const withDefaults = new ResendAdapter({
+        ...config,
+        defaultBcc: ["observer@example.com"],
+      });
+      const mockChat = { processMessage: vi.fn() };
+      await withDefaults.initialize(mockChat);
+
+      await withDefaults.postMessage(
+        "resend:user@example.com:abcdef0123456789",
+        {
+          markdown: "hi",
+          bcc: null,
+        } as unknown as Parameters<typeof withDefaults.postMessage>[1]
+      );
+
+      // null is not the "explicit empty array" signal — the config default wins.
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ bcc: ["observer@example.com"] })
+      );
+    });
+
     it("throws when Resend API returns an error", async () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);

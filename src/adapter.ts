@@ -33,6 +33,30 @@ export interface ChatInstance {
   ): void;
 }
 
+/**
+ * Read `bcc` / `cc` off an outgoing message safely.
+ *
+ * TS types say `string[]` but JS callers can pass anything (string, null,
+ * a number, an object). Rather than forward garbage to Resend, coerce:
+ *
+ *   present + array of strings   → return the array (empty array is a
+ *                                   valid "suppress the config default" signal)
+ *   absent                        → undefined (fall back to config default)
+ *   present but wrong shape       → undefined (fall back to config default)
+ */
+function coercePerMsgList(
+  message: unknown,
+  key: "bcc" | "cc"
+): string[] | undefined {
+  if (typeof message !== "object" || message === null) return undefined;
+  if (!(key in message)) return undefined;
+  const val = (message as Record<string, unknown>)[key];
+  if (val === null || val === undefined) return undefined;
+  if (!Array.isArray(val)) return undefined;
+  if (!val.every((v) => typeof v === "string")) return undefined;
+  return val as string[];
+}
+
 class NotImplementedError extends Error {
   constructor(method: string) {
     super(`${method} is not supported by the Resend adapter`);
@@ -201,14 +225,13 @@ export class ResendAdapter {
     // reach `resend.emails.send`; if neither the per-message nor the config
     // sets a value, we don't pass the field at all (byte-for-byte
     // compatible with the pre-#43 behavior).
-    const perMsgBcc =
-      typeof message === "object" && message !== null && "bcc" in message
-        ? (message as { bcc?: string[] }).bcc
-        : undefined;
-    const perMsgCc =
-      typeof message === "object" && message !== null && "cc" in message
-        ? (message as { cc?: string[] }).cc
-        : undefined;
+    //
+    // Runtime shape guard: TS types say `string[]` but JS callers can pass
+    // anything. Coerce non-array values (string, null, number) to undefined
+    // so the config default takes over instead of forwarding garbage to
+    // Resend.
+    const perMsgBcc = coercePerMsgList(message, "bcc");
+    const perMsgCc = coercePerMsgList(message, "cc");
     const bcc = perMsgBcc !== undefined ? perMsgBcc : this.config.defaultBcc;
     const cc = perMsgCc !== undefined ? perMsgCc : this.config.defaultCc;
 
