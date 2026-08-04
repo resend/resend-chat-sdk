@@ -43,15 +43,24 @@ export interface ResendAttachment {
   url?: string;
 }
 
+export type ResendApiKey = string | (() => Promise<string>);
+
+export type ResendWebhookVerifier = (
+  request: Request,
+  rawBody: string
+) => Promise<unknown> | unknown;
+
 export interface ResendAdapterConfig {
-  /** Resend API key. Falls back to RESEND_API_KEY env var. */
-  apiKey?: string;
+  /** Resend API key or lazy resolver. Falls back to RESEND_API_KEY env var. */
+  apiKey?: ResendApiKey;
   /** Sender email address (required). */
   fromAddress: string;
   /** Display name for the From header (optional). */
   fromName?: string;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
+  /** Custom verifier for webhook gateways that authenticate forwarded requests. */
+  webhookVerifier?: ResendWebhookVerifier;
 }
 
 export interface ResendWebhookPayload {

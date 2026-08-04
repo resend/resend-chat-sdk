@@ -57,7 +57,10 @@ export class ResendAdapter {
   }
 
   /** Lazily create the Resend client so both initialize() and direct usage work. */
-  private getResend(): Resend {
+  private async getResend(): Promise<Resend> {
+    if (typeof this.config.apiKey === "function") {
+      return new Resend(await this.config.apiKey());
+    }
     if (!this.resend) {
       const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
       if (!apiKey) {
@@ -71,12 +74,15 @@ export class ResendAdapter {
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
-    this.getResend();
     this.chat = chat;
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
-    this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
+    this.webhookHandler = new WebhookHandler(
+      await this.getResend(),
+      webhookSecret,
+      this.config.webhookVerifier
+    );
   }
 
   encodeThreadId(id: ResendThreadId): string {
@@ -102,7 +108,7 @@ export class ResendAdapter {
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET;
-    if (!webhookSecret) {
+    if (!(webhookSecret || this.config.webhookVerifier)) {
       throw new Error(
         "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env)"
       );
@@ -150,7 +156,7 @@ export class ResendAdapter {
     threadId: string,
     message: AdapterPostableMessage
   ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
-    const resend = this.getResend();
+    const resend = await this.getResend();
 
     // Normalize AdapterPostableMessage to { text?, formatted?, card? }
     let normalized: { text?: string; formatted?: Root; card?: CardNode };
