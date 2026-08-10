@@ -70,13 +70,14 @@ export class ResendAdapter {
     return this.resend;
   }
 
-  async initialize(chat: ChatInstance): Promise<void> {
+  initialize(chat: ChatInstance): Promise<void> {
     this.getResend();
     this.chat = chat;
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
     this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
+    return Promise.resolve();
   }
 
   encodeThreadId(id: ResendThreadId): string {
@@ -293,27 +294,27 @@ export class ResendAdapter {
     return threadId;
   }
 
-  async fetchThread(threadId: string): Promise<{
+  fetchThread(threadId: string): Promise<{
     id: string;
     channelId: string;
     metadata: Record<string, unknown>;
   }> {
     const decoded = this.threadResolver.decodeThreadId(threadId);
-    return {
+    return Promise.resolve({
       id: threadId,
       channelId: this.channelIdFromThreadId(threadId),
       metadata: {
         title: `Conversation with ${decoded.toAddress}`,
         toAddress: decoded.toAddress,
       },
-    };
+    });
   }
 
-  async fetchMessages(_threadId: string): Promise<{
+  fetchMessages(_threadId: string): Promise<{
     messages: Message<ResendRawMessage>[];
     nextCursor?: string;
   }> {
-    return { messages: [] };
+    return Promise.resolve({ messages: [] });
   }
 
   parseMessage(raw: ResendRawMessage): Message<ResendRawMessage> {

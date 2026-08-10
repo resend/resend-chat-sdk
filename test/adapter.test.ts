@@ -92,16 +92,16 @@ describe("ResendAdapter", () => {
       await adapter.initialize(mockChat);
     });
 
-    it("throws without API key", async () => {
+    it("throws without API key", () => {
       const noKeyAdapter = new ResendAdapter({
         ...config,
         apiKey: undefined,
       });
       const env = process.env.RESEND_API_KEY;
       process.env.RESEND_API_KEY = "";
-      await expect(
+      expect(() =>
         noKeyAdapter.initialize({ processMessage: vi.fn() })
-      ).rejects.toThrow();
+      ).toThrow();
       if (env) {
         process.env.RESEND_API_KEY = env;
       }
