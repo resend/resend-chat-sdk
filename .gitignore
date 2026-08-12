@@ -2,3 +2,4 @@ node_modules
 dist
 *.tgz
 .env
+scripts/.manual-thread-state.json
