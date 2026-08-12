@@ -1,4 +1,5 @@
 import type {
+  Adapter,
   AdapterPostableMessage,
   StreamChunk,
   StreamOptions,
@@ -40,7 +41,9 @@ class NotImplementedError extends Error {
   }
 }
 
-export class ResendAdapter {
+export class ResendAdapter
+  implements Adapter<ResendThreadId, ResendRawMessage>
+{
   readonly name = "resend";
   readonly userName: string;
 
@@ -283,15 +286,15 @@ export class ResendAdapter {
     return this.formatConverter.fromAst(content);
   }
 
-  async openDM(email: string): Promise<string> {
+  openDM(email: string): Promise<string> {
     const messageId = generateMessageId(email);
-    const hash = await hashMessageId(messageId);
+    const hash = hashMessageId(messageId);
     const threadId = this.threadResolver.encodeThreadId({
       toAddress: email,
       rootMessageIdHash: hash,
     });
     this.threadResolver.trackMessage(threadId, messageId);
-    return threadId;
+    return Promise.resolve(threadId);
   }
 
   fetchThread(threadId: string): Promise<{
