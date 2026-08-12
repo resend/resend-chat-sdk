@@ -1,107 +1,189 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ResendAdapter } from "../src/adapter.js";
-import type { ResendAdapterConfig } from "../src/types.js";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { MemoryStateAdapter } from "@chat-adapter/state-memory";
+import { Chat } from "chat";
+import { Webhook } from "svix";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { ResendAdapter } from "../src/adapter.js";
 
-const mockSend = vi.fn();
-const mockReceivingGet = vi.fn();
-const mockVerify = vi.fn();
+const WEBHOOK_SECRET = `whsec_${Buffer.from("thread-persistence-test-secret").toString("base64")}`;
 
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: {
-      send: mockSend,
-      receiving: {
-        get: mockReceivingGet,
-      },
-    },
-    webhooks: {
-      verify: mockVerify,
-    },
-  })),
-}));
+const RECEIVING_URL_RE = /^\/emails\/receiving\/(.+)$/;
 
-const config: ResendAdapterConfig = {
-  apiKey: "re_test_123",
-  webhookSecret: "whsec_test",
-  fromAddress: "bot@example.com",
-};
+interface SentEmail {
+  from: string;
+  headers?: Record<string, string>;
+  html?: string;
+  subject: string;
+  text?: string;
+  to: string[];
+}
 
-async function receiveInboundEmail(adapter: ResendAdapter): Promise<string> {
-  const mockChat = { processMessage: vi.fn() };
-  await adapter.initialize(mockChat);
+let server: Server;
+let sentEmails: SentEmail[] = [];
+const inboundEmails = new Map<string, Record<string, unknown>>();
+let createResendAdapter: typeof import("../src/index.js")["createResendAdapter"];
 
-  const webhookPayload = {
+beforeAll(async () => {
+  server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("Content-Type", "application/json");
+      if (req.method === "POST" && req.url === "/emails") {
+        sentEmails.push(JSON.parse(body));
+        res.end(JSON.stringify({ id: `re_sent_${sentEmails.length}` }));
+        return;
+      }
+      const inboundId = req.url?.match(RECEIVING_URL_RE)?.[1];
+      const email = inboundId ? inboundEmails.get(inboundId) : undefined;
+      if (req.method === "GET" && email) {
+        res.end(JSON.stringify(email));
+        return;
+      }
+      res.statusCode = 404;
+      res.end(
+        JSON.stringify({
+          name: "not_found",
+          message: `no route for ${req.method} ${req.url}`,
+        })
+      );
+    });
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+  process.env.RESEND_BASE_URL = `http://127.0.0.1:${port}`;
+  ({ createResendAdapter } = await import("../src/index.js"));
+});
+
+afterAll(() => {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+});
+
+beforeEach(() => {
+  sentEmails = [];
+});
+
+function createProcess(state: MemoryStateAdapter): {
+  chat: Chat<{ resend: ResendAdapter }>;
+  resend: ResendAdapter;
+} {
+  const resend = createResendAdapter({
+    apiKey: "re_test_123",
+    webhookSecret: WEBHOOK_SECRET,
+    fromAddress: "bot@example.com",
+  });
+  const chat = new Chat({
+    userName: "email-bot",
+    adapters: { resend },
+    state,
+  });
+  return { chat, resend };
+}
+
+let inboundCounter = 0;
+
+async function deliverInboundEmail(
+  chat: Chat<{ resend: ResendAdapter }>
+): Promise<{ messageId: string }> {
+  inboundCounter += 1;
+  const emailId = `re_inbound_${inboundCounter}`;
+  const messageId = `<inbound-${inboundCounter}@mail.example.com>`;
+  inboundEmails.set(emailId, {
+    id: emailId,
+    from: "customer@example.com",
+    to: ["bot@example.com"],
+    subject: "Help with my order",
+    message_id: messageId,
+    text: "Where is my package?",
+    html: "<p>Where is my package?</p>",
+    headers: {},
+    created_at: "2025-01-15T10:30:00Z",
+  });
+
+  const payload = JSON.stringify({
     type: "email.received",
     created_at: "2025-01-15T10:30:00Z",
     data: {
-      email_id: "re_inbound_1",
+      email_id: emailId,
       from: "customer@example.com",
       to: ["bot@example.com"],
       subject: "Help with my order",
-      message_id: "<inbound-1@mail.example.com>",
-    },
-  };
-
-  mockVerify.mockReturnValue(webhookPayload);
-  mockReceivingGet.mockResolvedValue({
-    data: {
-      id: "re_inbound_1",
-      from: "customer@example.com",
-      to: ["bot@example.com"],
-      subject: "Help with my order",
-      message_id: "<inbound-1@mail.example.com>",
-      text: "Where is my package?",
-      html: "<p>Where is my package?</p>",
-      headers: {},
-      created_at: "2025-01-15T10:30:00Z",
+      message_id: messageId,
     },
   });
 
-  const response = await adapter.handleWebhook(
+  const svixId = `msg_${inboundCounter}`;
+  const timestamp = new Date();
+  const signature = new Webhook(WEBHOOK_SECRET).sign(
+    svixId,
+    timestamp,
+    payload
+  );
+
+  const tasks: Promise<unknown>[] = [];
+  const response = await chat.webhooks.resend(
     new Request("https://example.com/webhook", {
       method: "POST",
       headers: {
-        "svix-id": "msg_1",
-        "svix-timestamp": "12345",
-        "svix-signature": "v1,valid",
+        "svix-id": svixId,
+        "svix-timestamp": String(Math.floor(timestamp.getTime() / 1000)),
+        "svix-signature": signature,
       },
-      body: JSON.stringify(webhookPayload),
-    })
+      body: payload,
+    }),
+    { waitUntil: (task) => tasks.push(task) }
   );
-  expect(response.status).toBe(200);
+  if (response.status !== 200) {
+    throw new Error(`webhook rejected with status ${response.status}`);
+  }
+  await Promise.all(tasks);
 
-  return mockChat.processMessage.mock.calls[0][1] as string;
+  return { messageId };
 }
 
 describe("threading state across processes", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSend.mockResolvedValue({ data: { id: "re_sent_1" } });
-  });
-
   it("threads the reply when the same process handles inbound and outbound", async () => {
-    const adapter = new ResendAdapter(config);
-    const threadId = await receiveInboundEmail(adapter);
+    const { chat } = createProcess(new MemoryStateAdapter());
+    chat.onNewMention(async (thread, message) => {
+      await thread.subscribe();
+      await thread.post(`Echo: ${message.text}`);
+    });
 
-    await adapter.postMessage(threadId, "It ships tomorrow.");
+    const { messageId } = await deliverInboundEmail(chat);
 
-    const sent = mockSend.mock.calls[0][0];
-    expect(sent.subject).toBe("Re: Help with my order");
-    expect(sent.headers?.["In-Reply-To"]).toBe("<inbound-1@mail.example.com>");
-    expect(sent.headers?.References).toContain("<inbound-1@mail.example.com>");
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0].to).toEqual(["customer@example.com"]);
+    expect(sentEmails[0].subject).toBe("Re: Help with my order");
+    expect(sentEmails[0].headers?.["In-Reply-To"]).toBe(messageId);
+    expect(sentEmails[0].headers?.References).toContain(messageId);
   });
 
   it("threads the reply when a different process sends the outbound", async () => {
-    const inboundProcess = new ResendAdapter(config);
-    const threadId = await receiveInboundEmail(inboundProcess);
+    const state = new MemoryStateAdapter();
 
-    const outboundProcess = new ResendAdapter(config);
-    await outboundProcess.initialize({ processMessage: vi.fn() });
-    await outboundProcess.postMessage(threadId, "It ships tomorrow.");
+    const inboundProcess = createProcess(state);
+    let threadId = "";
+    inboundProcess.chat.onNewMention(async (thread) => {
+      await thread.subscribe();
+      threadId = thread.id;
+    });
+    const { messageId } = await deliverInboundEmail(inboundProcess.chat);
+    expect(threadId).not.toBe("");
 
-    const sent = mockSend.mock.calls[0][0];
-    expect(sent.subject).toBe("Re: Help with my order");
-    expect(sent.headers?.["In-Reply-To"]).toBe("<inbound-1@mail.example.com>");
-    expect(sent.headers?.References).toContain("<inbound-1@mail.example.com>");
+    const outboundProcess = createProcess(state);
+    await outboundProcess.chat.initialize();
+    await outboundProcess.resend.postMessage(threadId, "It ships tomorrow.");
+
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0].subject).toBe("Re: Help with my order");
+    expect(sentEmails[0].headers?.["In-Reply-To"]).toBe(messageId);
+    expect(sentEmails[0].headers?.References).toContain(messageId);
   });
 });
