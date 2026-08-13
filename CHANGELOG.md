@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- 3b57f58: Persist email threading state (reply headers and subjects) in the state adapter
+
 ## 0.2.2
 
 ### Patch Changes
