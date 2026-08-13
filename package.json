@@ -73,7 +73,7 @@
     "tsx": "4.23.12",
     "typescript": "5.9.3",
     "ultracite": "7.2.4",
-    "vitest": "3.0.0"
+    "vitest": "3.2.7"
   },
   "files": [
     "dist"
