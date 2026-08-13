@@ -1,6 +1,6 @@
 {
   "name": "@resend/chat-sdk-adapter",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Vercel Chat SDK adapter for Resend email",
   "author": "João Melo",
   "license": "MIT",
