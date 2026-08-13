@@ -61,7 +61,7 @@
     "resend": "^6.9.2"
   },
   "devDependencies": {
-    "@actions/core": "3.0.0",
+    "@actions/core": "3.0.1",
     "@actions/exec": "3.0.0",
     "@actions/github": "9.1.0",
     "@biomejs/biome": "2.5.8",
