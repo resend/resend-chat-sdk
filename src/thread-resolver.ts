@@ -42,7 +42,7 @@ export class ThreadResolver {
       const candidateIds = this.extractMessageIds(inReplyTo, references);
       for (const candidate of candidateIds) {
         const existingThread = this.state
-          ? await this.state.get<string>(`resend:msg-thread:${candidate}`)
+          ? await this.state.get<string>(`resend:message-thread:${candidate}`)
           : this.messageToThread.get(candidate);
         if (existingThread) {
           await this.trackMessage(existingThread, messageId);
@@ -71,7 +71,7 @@ export class ThreadResolver {
         });
       }
       await this.state.set(
-        `resend:msg-thread:${messageId}`,
+        `resend:message-thread:${messageId}`,
         threadId,
         STATE_TTL_MS
       );
