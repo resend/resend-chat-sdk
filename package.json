@@ -56,7 +56,7 @@
     "hast-util-to-html": "^9.0.5",
     "mdast-util-to-hast": "^13.2.1",
     "react-email": "^6.0.0",
-    "resend": "6.9.2"
+    "resend": "6.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
