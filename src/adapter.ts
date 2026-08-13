@@ -1,6 +1,7 @@
 import type {
   Adapter,
   AdapterPostableMessage,
+  StateAdapter,
   StreamChunk,
   StreamOptions,
   WebhookOptions,
@@ -26,6 +27,7 @@ import {
 import { WebhookHandler } from "./webhook-handler.js";
 
 export interface ChatInstance {
+  getState?(): StateAdapter;
   processMessage(
     adapter: unknown,
     threadId: string,
@@ -76,6 +78,7 @@ export class ResendAdapter
   initialize(chat: ChatInstance): Promise<void> {
     this.getResend();
     this.chat = chat;
+    this.threadResolver.state = chat.getState?.() ?? null;
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
@@ -142,7 +145,7 @@ export class ResendAdapter
       references,
     });
 
-    this.threadResolver.trackSubject(threadId, email.subject);
+    await this.threadResolver.trackSubject(threadId, email.subject);
 
     const parsed = parseInboundEmail(email, threadId, this.config.fromAddress);
     this.chat.processMessage(this, threadId, parsed, options);
@@ -192,9 +195,9 @@ export class ResendAdapter
       : this.config.fromAddress;
 
     const messageId = generateMessageId(this.config.fromAddress);
-    const headers = this.threadResolver.getReplyHeaders(threadId);
+    const headers = await this.threadResolver.getReplyHeaders(threadId);
 
-    const storedSubject = this.threadResolver.getSubject(threadId);
+    const storedSubject = await this.threadResolver.getSubject(threadId);
     const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
 
     const response = await resend.emails.send({
@@ -212,7 +215,7 @@ export class ResendAdapter
       );
     }
 
-    this.threadResolver.trackMessage(threadId, messageId);
+    await this.threadResolver.trackMessage(threadId, messageId);
 
     return {
       id: response.data.id,
@@ -286,15 +289,15 @@ export class ResendAdapter
     return this.formatConverter.fromAst(content);
   }
 
-  openDM(email: string): Promise<string> {
+  async openDM(email: string): Promise<string> {
     const messageId = generateMessageId(email);
     const hash = hashMessageId(messageId);
     const threadId = this.threadResolver.encodeThreadId({
       toAddress: email,
       rootMessageIdHash: hash,
     });
-    this.threadResolver.trackMessage(threadId, messageId);
-    return Promise.resolve(threadId);
+    await this.threadResolver.trackMessage(threadId, messageId);
+    return threadId;
   }
 
   fetchThread(threadId: string): Promise<{

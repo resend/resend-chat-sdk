@@ -115,7 +115,7 @@ describe("ThreadResolver", () => {
       });
 
       // Bot replies, tracking both our messageId and the SES-assigned one
-      resolver.trackMessage(root, "<ses-reply@amazonses.com>");
+      await resolver.trackMessage(root, "<ses-reply@amazonses.com>");
 
       const userReply = await resolver.resolveThreadId({
         toAddress: "bot@example.com",
@@ -164,64 +164,65 @@ describe("ThreadResolver", () => {
   });
 
   describe("getReplyHeaders", () => {
-    it("returns In-Reply-To and References for a thread", () => {
+    it("returns In-Reply-To for the last message and References for all", async () => {
       const resolver = new ThreadResolver();
-      resolver.trackMessage("resend:bot@example.com:abc123", "<msg@test.com>");
-      const headers = resolver.getReplyHeaders("resend:bot@example.com:abc123");
-      expect(headers).toBeDefined();
-      expect(headers?.["In-Reply-To"]).toBe("<msg@test.com>");
-      expect(headers?.References).toContain("<msg@test.com>");
+      await resolver.trackMessage(
+        "resend:bot@example.com:abc123",
+        "<msg1@test.com>"
+      );
+      await resolver.trackMessage(
+        "resend:bot@example.com:abc123",
+        "<msg2@test.com>"
+      );
+      const headers = await resolver.getReplyHeaders(
+        "resend:bot@example.com:abc123"
+      );
+      expect(headers).toEqual({
+        "In-Reply-To": "<msg2@test.com>",
+        References: "<msg1@test.com> <msg2@test.com>",
+      });
     });
 
-    it("returns undefined when no messages tracked", () => {
+    it("returns undefined when no messages tracked", async () => {
       const resolver = new ThreadResolver();
-      const headers = resolver.getReplyHeaders(
+      const headers = await resolver.getReplyHeaders(
         "resend:bot@example.com:unknown"
       );
       expect(headers).toBeUndefined();
     });
   });
 
-  describe("getLastMessageId", () => {
-    it("returns last tracked message ID", () => {
-      const resolver = new ThreadResolver();
-      resolver.trackMessage("resend:bot@example.com:abc123", "<msg1@test.com>");
-      resolver.trackMessage("resend:bot@example.com:abc123", "<msg2@test.com>");
-      expect(resolver.getLastMessageId("resend:bot@example.com:abc123")).toBe(
-        "<msg2@test.com>"
-      );
-    });
-
-    it("returns undefined for unknown thread", () => {
-      const resolver = new ThreadResolver();
-      expect(
-        resolver.getLastMessageId("resend:bot@example.com:unknown")
-      ).toBeUndefined();
-    });
-  });
-
   describe("subject tracking", () => {
-    it("stores and retrieves subject for thread", () => {
+    it("stores and retrieves subject for thread", async () => {
       const resolver = new ThreadResolver();
-      resolver.trackSubject("resend:bot@example.com:abc123", "Hello World");
-      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe(
+      await resolver.trackSubject(
+        "resend:bot@example.com:abc123",
+        "Hello World"
+      );
+      expect(await resolver.getSubject("resend:bot@example.com:abc123")).toBe(
         "Hello World"
       );
     });
 
-    it("keeps first subject, ignores subsequent", () => {
+    it("keeps first subject, ignores subsequent", async () => {
       const resolver = new ThreadResolver();
-      resolver.trackSubject("resend:bot@example.com:abc123", "First Subject");
-      resolver.trackSubject("resend:bot@example.com:abc123", "Second Subject");
-      expect(resolver.getSubject("resend:bot@example.com:abc123")).toBe(
+      await resolver.trackSubject(
+        "resend:bot@example.com:abc123",
+        "First Subject"
+      );
+      await resolver.trackSubject(
+        "resend:bot@example.com:abc123",
+        "Second Subject"
+      );
+      expect(await resolver.getSubject("resend:bot@example.com:abc123")).toBe(
         "First Subject"
       );
     });
 
-    it("returns undefined for unknown thread", () => {
+    it("returns undefined for unknown thread", async () => {
       const resolver = new ThreadResolver();
       expect(
-        resolver.getSubject("resend:bot@example.com:unknown")
+        await resolver.getSubject("resend:bot@example.com:unknown")
       ).toBeUndefined();
     });
   });

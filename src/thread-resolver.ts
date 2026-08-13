@@ -1,7 +1,10 @@
+import type { StateAdapter } from "chat";
 import type { ResendThreadId } from "./types.js";
 import { hashMessageId } from "./utils.js";
 
 const WHITESPACE_RE = /\s+/;
+const STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_TRACKED_MESSAGES = 100;
 
 interface ResolveInput {
   inReplyTo: string | undefined;
@@ -11,6 +14,8 @@ interface ResolveInput {
 }
 
 export class ThreadResolver {
+  state: StateAdapter | null = null;
+
   private readonly messageToThread = new Map<string, string>();
   private readonly threadMessages = new Map<string, string[]>();
   private readonly threadSubjects = new Map<string, string>();
@@ -36,24 +41,43 @@ export class ThreadResolver {
     if (inReplyTo || references) {
       const candidateIds = this.extractMessageIds(inReplyTo, references);
       for (const candidate of candidateIds) {
-        const existingThread = this.messageToThread.get(candidate);
+        const existingThread = this.state
+          ? await this.state.get<string>(`resend:message-thread:${candidate}`)
+          : this.messageToThread.get(candidate);
         if (existingThread) {
-          this.trackMessage(existingThread, messageId);
+          await this.trackMessage(existingThread, messageId);
           return existingThread;
         }
       }
     }
 
-    const hash = await hashMessageId(messageId);
+    const hash = hashMessageId(messageId);
     const threadId = this.encodeThreadId({
       toAddress,
       rootMessageIdHash: hash,
     });
-    this.trackMessage(threadId, messageId);
+    await this.trackMessage(threadId, messageId);
     return threadId;
   }
 
-  trackMessage(threadId: string, messageId: string): void {
+  async trackMessage(threadId: string, messageId: string): Promise<void> {
+    if (this.state) {
+      const key = `resend:thread-messages:${threadId}`;
+      const messages = await this.state.getList<string>(key);
+      if (!messages.includes(messageId)) {
+        await this.state.appendToList(key, messageId, {
+          maxLength: MAX_TRACKED_MESSAGES,
+          ttlMs: STATE_TTL_MS,
+        });
+      }
+      await this.state.set(
+        `resend:message-thread:${messageId}`,
+        threadId,
+        STATE_TTL_MS
+      );
+      return;
+    }
+
     this.messageToThread.set(messageId, threadId);
     const messages = this.threadMessages.get(threadId) || [];
     if (!messages.includes(messageId)) {
@@ -62,34 +86,45 @@ export class ThreadResolver {
     this.threadMessages.set(threadId, messages);
   }
 
-  getLastMessageId(threadId: string): string | undefined {
-    const messages = this.threadMessages.get(threadId);
-    if (!messages || messages.length === 0) {
-      return undefined;
-    }
-    return messages.at(-1);
-  }
-
-  getReplyHeaders(threadId: string): Record<string, string> | undefined {
-    const lastMessageId = this.getLastMessageId(threadId);
+  async getReplyHeaders(
+    threadId: string
+  ): Promise<Record<string, string> | undefined> {
+    const messages = this.state
+      ? await this.state.getList<string>(`resend:thread-messages:${threadId}`)
+      : this.threadMessages.get(threadId) || [];
+    const lastMessageId = messages.at(-1);
     if (!lastMessageId) {
       return undefined;
     }
 
-    const messages = this.threadMessages.get(threadId) || [];
     return {
       "In-Reply-To": lastMessageId,
       References: messages.join(" "),
     };
   }
 
-  trackSubject(threadId: string, subject: string): void {
+  async trackSubject(threadId: string, subject: string): Promise<void> {
+    if (this.state) {
+      await this.state.setIfNotExists(
+        `resend:thread-subject:${threadId}`,
+        subject,
+        STATE_TTL_MS
+      );
+      return;
+    }
+
     if (!this.threadSubjects.has(threadId)) {
       this.threadSubjects.set(threadId, subject);
     }
   }
 
-  getSubject(threadId: string): string | undefined {
+  async getSubject(threadId: string): Promise<string | undefined> {
+    if (this.state) {
+      const subject = await this.state.get<string>(
+        `resend:thread-subject:${threadId}`
+      );
+      return subject ?? undefined;
+    }
     return this.threadSubjects.get(threadId);
   }
 
