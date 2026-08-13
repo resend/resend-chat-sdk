@@ -59,7 +59,7 @@
     "resend": "^6.9.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.4",
+    "@biomejs/biome": "2.5.8",
     "@changesets/cli": "2.29.8",
     "@changesets/pre": "2.0.2",
     "@chat-adapter/shared": "4.20.0",
