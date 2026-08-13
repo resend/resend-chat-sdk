@@ -62,14 +62,8 @@ const releaseAlreadyExists = async (tagName: string) => {
   }
 };
 
-const ensureGithubRelease = async ({
-  name,
-  version,
-}: {
-  name: string;
-  version: string;
-}) => {
-  const tagName = `${name}@${version}`;
+const ensureGithubRelease = async ({ version }: { version: string }) => {
+  const tagName = `v${version}`;
 
   await octokit.rest.git
     .createRef({
@@ -261,7 +255,7 @@ const main = async () => {
   }
 
   if (didPublish) {
-    await ensureGithubRelease({ name, version });
+    await ensureGithubRelease({ version });
   }
 };
 
