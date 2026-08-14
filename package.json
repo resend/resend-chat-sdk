@@ -74,7 +74,7 @@
     "@types/react": "19.2.14",
     "chat": "4.20.0",
     "mdast-util-to-string": "4.0.0",
-    "pkg-pr-new": "0.0.66",
+    "pkg-pr-new": "0.0.88",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "remark": "15.0.1",
