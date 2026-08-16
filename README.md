@@ -64,10 +64,53 @@ interface ResendAdapterConfig {
   apiKey?: string;
   /** Webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
+  /** BCC every outbound by default. Per-message `bcc` overrides. */
+  defaultBcc?: string[];
+  /** CC every outbound by default. Per-message `cc` overrides. */
+  defaultCc?: string[];
 }
 ```
 
 ## Features
+
+### BCC / CC
+
+Attach a BCC or CC to every outbound message either as an adapter default
+(config) or per-call (message):
+
+```ts
+// Config default — applied to every send.
+const resend = createResendAdapter({
+  fromAddress: "bot@example.com",
+  defaultBcc: ["archive@example.com"],
+  defaultCc: ["audit@example.com"],
+});
+
+// Per-message override — wins over the config default (does not merge).
+await thread.post({
+  markdown: "hi",
+  bcc: ["ops@example.com"],
+  cc: ["ceo@example.com"],
+});
+
+// Explicit empty array suppresses the config default for a single call.
+await thread.post({ markdown: "hi", bcc: [] });
+```
+
+If neither the config nor the message specifies `bcc`/`cc`, the adapter
+does not pass those fields to Resend (byte-for-byte compatible with
+adapters that predate this feature).
+
+**Streamed sends** (`thread.post(asyncIterable)` — see [Streaming](#streaming))
+run through the same `postMessage` path with only the buffered `{ markdown }`
+in hand; there is no per-call `bcc`/`cc` override for streams. Set the addresses
+via `defaultBcc` / `defaultCc` on the adapter config to apply them uniformly
+to streamed sends.
+
+**Runtime safety.** TypeScript enforces `string[]` on both `bcc` and `cc`,
+but plain-JS callers can slip other shapes through. Malformed values (a
+bare string, `null`, an array containing non-strings) are ignored — the
+config default takes over instead of forwarding garbage to Resend.
 
 ### Email Threading
 

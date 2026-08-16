@@ -12,6 +12,8 @@ export interface ResendThreadId {
 export interface ResendRawMessage {
   /** File attachments */
   attachments?: ResendAttachment[];
+  /** BCC recipients — set on outbound when `defaultBcc` / per-message `bcc` was applied. */
+  bcc?: string[];
   /** CC recipients */
   cc?: string[];
   /** ISO 8601 timestamp */
@@ -52,6 +54,44 @@ export interface ResendAdapterConfig {
   fromName?: string;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
+  /**
+   * BCC every outbound message by default. Useful for observability or
+   * compliance archives — e.g. copying every bot reply to an ops inbox.
+   * A per-message `bcc` on `thread.post()` OVERRIDES this default (does
+   * not merge) — including an explicit empty array, which suppresses the
+   * default for a single call. Omit / empty array → no `bcc` field is
+   * passed to Resend.
+   */
+  defaultBcc?: string[];
+  /**
+   * CC every outbound message by default. Per-message `cc` overrides with
+   * the same semantics as `defaultBcc`.
+   */
+  defaultCc?: string[];
+}
+
+/**
+ * Optional per-message extensions the Resend adapter honors on any
+ * `AdapterPostableMessage` object shape (markdown / raw / ast / card /
+ * normalized). Both fields override the corresponding `defaultBcc` /
+ * `defaultCc` on the adapter config for THIS call only (they do not
+ * merge — an explicit empty array is a valid "suppress the default"
+ * signal). Attach either or both alongside the body:
+ *
+ *   await thread.post({
+ *     markdown: "hi",
+ *     bcc: ["observer@example.com"],
+ *     cc:  ["audit@example.com"],
+ *   });
+ *
+ * The Chat SDK's `AdapterPostableMessage` type is defined in `chat`
+ * (upstream package) and doesn't declare these fields; they're accepted
+ * here because Resend passes them straight through to
+ * `resend.emails.send({ bcc, cc, … })`.
+ */
+export interface ResendPostExtensions {
+  bcc?: string[];
+  cc?: string[];
 }
 
 export interface ResendWebhookPayload {

@@ -36,6 +36,30 @@ export interface ChatInstance {
   ): void;
 }
 
+/**
+ * Read `bcc` / `cc` off an outgoing message safely.
+ *
+ * TS types say `string[]` but JS callers can pass anything (string, null,
+ * a number, an object). Rather than forward garbage to Resend, coerce:
+ *
+ *   present + array of strings   → return the array (empty array is a
+ *                                   valid "suppress the config default" signal)
+ *   absent                        → undefined (fall back to config default)
+ *   present but wrong shape       → undefined (fall back to config default)
+ */
+function coercePerMsgList(
+  message: unknown,
+  key: "bcc" | "cc"
+): string[] | undefined {
+  if (typeof message !== "object" || message === null) return undefined;
+  if (!(key in message)) return undefined;
+  const val = (message as Record<string, unknown>)[key];
+  if (val === null || val === undefined) return undefined;
+  if (!Array.isArray(val)) return undefined;
+  if (!val.every((v) => typeof v === "string")) return undefined;
+  return val as string[];
+}
+
 class NotImplementedError extends Error {
   constructor(method: string) {
     super(`${method} is not supported by the Resend adapter`);
@@ -200,6 +224,24 @@ export class ResendAdapter
     const storedSubject = await this.threadResolver.getSubject(threadId);
     const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
 
+    // Per-message BCC / CC — optional on any AdapterPostableMessage object
+    // shape (see `ResendPostExtensions` in ./types.ts). When present they
+    // OVERRIDE the corresponding `defaultBcc` / `defaultCc` on the adapter
+    // config (do not merge) — an explicit empty array is a valid signal to
+    // suppress the default for a single call. Only non-empty final values
+    // reach `resend.emails.send`; if neither the per-message nor the config
+    // sets a value, we don't pass the field at all (byte-for-byte
+    // compatible with the pre-#43 behavior).
+    //
+    // Runtime shape guard: TS types say `string[]` but JS callers can pass
+    // anything. Coerce non-array values (string, null, number) to undefined
+    // so the config default takes over instead of forwarding garbage to
+    // Resend.
+    const perMsgBcc = coercePerMsgList(message, "bcc");
+    const perMsgCc = coercePerMsgList(message, "cc");
+    const bcc = perMsgBcc !== undefined ? perMsgBcc : this.config.defaultBcc;
+    const cc = perMsgCc !== undefined ? perMsgCc : this.config.defaultCc;
+
     const response = await resend.emails.send({
       from: fromHeader,
       to: [decoded.toAddress],
@@ -207,6 +249,8 @@ export class ResendAdapter
       html: rendered.html,
       text: rendered.text,
       ...(headers && { headers }),
+      ...(bcc && bcc.length > 0 && { bcc }),
+      ...(cc && cc.length > 0 && { cc }),
     });
 
     if (response.error || !response.data) {
@@ -229,6 +273,8 @@ export class ResendAdapter
         html: rendered.html,
         headers: headers || {},
         createdAt: new Date().toISOString(),
+        ...(bcc && bcc.length > 0 && { bcc }),
+        ...(cc && cc.length > 0 && { cc }),
       },
       threadId,
     };
