@@ -81,7 +81,7 @@
     "svix": "1.99.1",
     "tsx": "4.23.12",
     "typescript": "5.9.3",
-    "ultracite": "7.2.4",
+    "ultracite": "7.10.8",
     "vitest": "3.2.7"
   },
   "files": [
