@@ -105,10 +105,21 @@ export interface ResendWebhookPayload {
 export interface ResendInboxWebhookPayload {
   created_at: string;
   data: {
-    source: string;
+    source: "api" | "dashboard" | "agent" | "system";
     inbox_id: string;
     thread_id: string;
     email_id: string;
+    /** The email without `html` or `text`. Absent when the email no longer exists. */
+    email?: Omit<ResendInboxEmail, "html" | "text">;
+    /** Absent when the thread no longer exists. */
+    thread?: {
+      object: "inbox_thread";
+      id: string;
+      subject: string | null;
+      folder: "inbox" | "archive" | "spam" | "sent" | "trash";
+      labels: Array<{ id: string; name: string; color: string }>;
+      read: boolean;
+    };
   };
   type: "inbox.email.received";
 }

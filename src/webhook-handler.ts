@@ -84,6 +84,6 @@ export class WebhookHandler {
         `Failed to fetch inbox email: ${response.error?.message || "Unknown error"}`
       );
     }
-    return response.data as unknown as ResendInboxEmail;
+    return response.data;
   }
 }
