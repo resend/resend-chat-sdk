@@ -9,6 +9,10 @@ import type { ResendAdapter } from "../src/adapter.js";
 const WEBHOOK_SECRET = `whsec_${Buffer.from("thread-persistence-test-secret").toString("base64")}`;
 
 const RECEIVING_URL_RE = /^\/emails\/receiving\/(.+)$/;
+const INBOX_EMAIL_URL_RE =
+  /^\/inboxes\/([^/]+)\/threads\/([^/]+)\/emails\/([^/]+)(\/reply)?$/;
+const INBOX_ID = "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1";
+const INBOX_THREAD_ID = "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90";
 
 interface SentEmail {
   from: string;
@@ -21,6 +25,7 @@ interface SentEmail {
 
 let server: Server;
 let sentEmails: SentEmail[] = [];
+let inboxReplies: { body: Record<string, unknown>; url: string }[] = [];
 const inboundEmails = new Map<string, Record<string, unknown>>();
 let createResendAdapter: typeof import("../src/index.js")["createResendAdapter"];
 
@@ -36,6 +41,19 @@ beforeAll(async () => {
         sentEmails.push(JSON.parse(body));
         res.end(JSON.stringify({ id: `re_sent_${sentEmails.length}` }));
         return;
+      }
+      const inboxMatch = req.url?.match(INBOX_EMAIL_URL_RE);
+      if (inboxMatch) {
+        const email = inboundEmails.get(inboxMatch[3]);
+        if (req.method === "POST" && inboxMatch[4]) {
+          inboxReplies.push({ url: req.url ?? "", body: JSON.parse(body) });
+          res.end(JSON.stringify({ id: `sent_${inboxReplies.length}` }));
+          return;
+        }
+        if (req.method === "GET" && email) {
+          res.end(JSON.stringify(email));
+          return;
+        }
       }
       const inboundId = req.url?.match(RECEIVING_URL_RE)?.[1];
       const email = inboundId ? inboundEmails.get(inboundId) : undefined;
@@ -68,9 +86,13 @@ afterAll(() => {
 
 beforeEach(() => {
   sentEmails = [];
+  inboxReplies = [];
 });
 
-function createProcess(state: MemoryStateAdapter): {
+function createProcess(
+  state: MemoryStateAdapter,
+  inboxId?: string
+): {
   chat: Chat<{ resend: ResendAdapter }>;
   resend: ResendAdapter;
 } {
@@ -78,6 +100,7 @@ function createProcess(state: MemoryStateAdapter): {
     apiKey: "re_test_123",
     webhookSecret: WEBHOOK_SECRET,
     fromAddress: "bot@example.com",
+    inboxId,
   });
   const chat = new Chat({
     userName: "email-bot",
@@ -119,7 +142,16 @@ async function deliverInboundEmail(
     },
   });
 
-  const svixId = `msg_${inboundCounter}`;
+  await sendWebhook(chat, payload, `msg_${inboundCounter}`);
+
+  return { messageId };
+}
+
+async function sendWebhook(
+  chat: Chat<{ resend: ResendAdapter }>,
+  payload: string,
+  svixId: string
+): Promise<void> {
   const timestamp = new Date();
   const signature = new Webhook(WEBHOOK_SECRET).sign(
     svixId,
@@ -144,8 +176,43 @@ async function deliverInboundEmail(
     throw new Error(`webhook rejected with status ${response.status}`);
   }
   await Promise.all(tasks);
+}
 
-  return { messageId };
+async function deliverInboxEmail(
+  chat: Chat<{ resend: ResendAdapter }>
+): Promise<{ emailId: string }> {
+  inboundCounter += 1;
+  const emailId = `00000000-0000-4000-8000-${String(inboundCounter).padStart(12, "0")}`;
+  inboundEmails.set(emailId, {
+    id: emailId,
+    direction: "inbound",
+    from: "Customer <customer@example.com>",
+    to: ["bot@example.com"],
+    cc: [],
+    bcc: [],
+    reply_to: [],
+    subject: "Help with my order",
+    message_id: `<inbound-${inboundCounter}@mail.example.com>`,
+    html: "<p>Where is my package?</p>",
+    text: "Where is my package?",
+    attachments: [],
+    read: false,
+    received_at: "2026-08-05T14:03:11.229Z",
+  });
+
+  const payload = JSON.stringify({
+    type: "inbox.email.received",
+    created_at: "2026-08-05T14:03:12.000Z",
+    data: {
+      source: "system",
+      inbox_id: INBOX_ID,
+      thread_id: INBOX_THREAD_ID,
+      email_id: emailId,
+    },
+  });
+  await sendWebhook(chat, payload, `msg_${inboundCounter}`);
+
+  return { emailId };
 }
 
 describe("threading state across processes", () => {
@@ -185,5 +252,49 @@ describe("threading state across processes", () => {
     expect(sentEmails[0].subject).toBe("Re: Help with my order");
     expect(sentEmails[0].headers?.["In-Reply-To"]).toBe(messageId);
     expect(sentEmails[0].headers?.References).toContain(messageId);
+  });
+});
+
+describe("inbox threads across processes", () => {
+  it("replies in the inbox thread when the same process handles inbound and outbound", async () => {
+    const { chat } = createProcess(new MemoryStateAdapter(), INBOX_ID);
+    let threadId = "";
+    chat.onNewMention(async (thread, message) => {
+      threadId = thread.id;
+      await thread.subscribe();
+      await thread.post(`Echo: ${message.text}`);
+    });
+
+    const { emailId } = await deliverInboxEmail(chat);
+
+    expect(threadId).toBe(`resend:${INBOX_ID}:${INBOX_THREAD_ID}`);
+    expect(sentEmails).toHaveLength(0);
+    expect(inboxReplies).toHaveLength(1);
+    expect(inboxReplies[0].url).toBe(
+      `/inboxes/${INBOX_ID}/threads/${INBOX_THREAD_ID}/emails/${emailId}/reply`
+    );
+    expect(inboxReplies[0].body.text).toBe("Echo: Where is my package?");
+  });
+
+  it("replies to the tracked email when a different process sends the outbound", async () => {
+    const state = new MemoryStateAdapter();
+
+    const inboundProcess = createProcess(state, INBOX_ID);
+    let threadId = "";
+    inboundProcess.chat.onNewMention(async (thread) => {
+      await thread.subscribe();
+      threadId = thread.id;
+    });
+    const { emailId } = await deliverInboxEmail(inboundProcess.chat);
+
+    const outboundProcess = createProcess(state, INBOX_ID);
+    await outboundProcess.chat.initialize();
+    await outboundProcess.resend.postMessage(threadId, "It ships tomorrow.");
+
+    expect(inboxReplies).toHaveLength(1);
+    expect(inboxReplies[0].url).toBe(
+      `/inboxes/${INBOX_ID}/threads/${INBOX_THREAD_ID}/emails/${emailId}/reply`
+    );
+    expect(inboxReplies[0].body.text).toBe("It ships tomorrow.");
   });
 });

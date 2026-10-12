@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseInboundEmail } from "../src/message-parser.js";
-import type { ResendReceivedEmail } from "../src/types.js";
+import { parseInboundEmail, parseInboxEmail } from "../src/message-parser.js";
+import type { ResendInboxEmail, ResendReceivedEmail } from "../src/types.js";
 
 const FROM_ADDRESS = "bot@example.com";
 
@@ -83,5 +83,80 @@ describe("parseInboundEmail", () => {
     };
     const result = parseInboundEmail(htmlOnly, "thread1", FROM_ADDRESS);
     expect(result.text).toContain("HTML only");
+  });
+});
+
+describe("parseInboxEmail", () => {
+  const thread = {
+    inboxId: "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1",
+    threadId: "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90",
+  };
+  const chatThreadId = `resend:${thread.inboxId}:${thread.threadId}`;
+  const email: ResendInboxEmail = {
+    id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+    direction: "inbound",
+    from: "Ada Lovelace <Ada@Example.org>",
+    to: ["agent@example.com"],
+    cc: [],
+    bcc: [],
+    reply_to: ["replies@example.org"],
+    subject: "Refund for order 1041",
+    message_id: "<1041@example.org>",
+    html: "<p>Could I get a refund?</p>",
+    text: null,
+    attachments: [{ id: "att_1", filename: "receipt.pdf", size: 20_841 }],
+    read: false,
+    received_at: "2026-08-05T14:03:11.229Z",
+  };
+
+  it("maps the inbox email to a message", () => {
+    const result = parseInboxEmail(email, thread, chatThreadId, FROM_ADDRESS);
+
+    expect(result.id).toBe(email.id);
+    expect(result.threadId).toBe(chatThreadId);
+    expect(result.text).toBe("Could I get a refund?");
+    expect(result.author.userId).toBe("ada@example.org");
+    expect(result.author.fullName).toBe("Ada Lovelace");
+    expect(result.metadata.dateSent).toEqual(new Date(email.received_at));
+    expect(result.isMention).toBe(true);
+    expect(result.attachments).toEqual([
+      { type: "file", name: "receipt.pdf", size: 20_841 },
+    ]);
+  });
+
+  it("keeps the inbox IDs and Reply-To in the raw message", () => {
+    const { raw } = parseInboxEmail(email, thread, chatThreadId, FROM_ADDRESS);
+
+    expect(raw).toMatchObject({
+      id: email.id,
+      inboxId: thread.inboxId,
+      inboxThreadId: thread.threadId,
+      messageId: "<1041@example.org>",
+      replyTo: ["replies@example.org"],
+      subject: "Refund for order 1041",
+      text: undefined,
+      html: "<p>Could I get a refund?</p>",
+      createdAt: email.received_at,
+    });
+    expect(raw.attachments).toEqual([
+      {
+        id: "att_1",
+        filename: "receipt.pdf",
+        contentType: "application/octet-stream",
+        size: 20_841,
+      },
+    ]);
+  });
+
+  it("uses empty strings for a null subject and Message-ID", () => {
+    const { raw } = parseInboxEmail(
+      { ...email, subject: null, message_id: null },
+      thread,
+      chatThreadId,
+      FROM_ADDRESS
+    );
+
+    expect(raw.subject).toBe("");
+    expect(raw.messageId).toBe("");
   });
 });

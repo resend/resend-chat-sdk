@@ -19,6 +19,33 @@ describe("ThreadResolver", () => {
     });
   });
 
+  describe("encodeThreadId for an inbox thread", () => {
+    it("encodes to resend:{inboxId}:{threadId} format", () => {
+      expect(
+        resolver.encodeThreadId({
+          inboxId: "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1",
+          threadId: "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90",
+        })
+      ).toBe(
+        "resend:b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1:7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90"
+      );
+    });
+  });
+
+  describe("trackInboxEmail", () => {
+    it("returns the last tracked email of the thread", async () => {
+      const inboxResolver = new ThreadResolver();
+      await inboxResolver.trackInboxEmail("resend:inbox:thread", "email_1");
+      await inboxResolver.trackInboxEmail("resend:inbox:thread", "email_2");
+      expect(await inboxResolver.getInboxEmail("resend:inbox:thread")).toBe(
+        "email_2"
+      );
+      expect(await inboxResolver.getInboxEmail("resend:other:thread")).toBe(
+        undefined
+      );
+    });
+  });
+
   describe("decodeThreadId", () => {
     it("decodes resend:{to}:{hash} format", () => {
       const decoded = resolver.decodeThreadId(
@@ -27,6 +54,16 @@ describe("ThreadResolver", () => {
       expect(decoded).toEqual({
         toAddress: "bot@example.com",
         rootMessageIdHash: "a1b2c3d4e5f6a7b8",
+      });
+    });
+
+    it("decodes resend:{inboxId}:{threadId} format", () => {
+      const decoded = resolver.decodeThreadId(
+        "resend:b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1:7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90"
+      );
+      expect(decoded).toEqual({
+        inboxId: "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1",
+        threadId: "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90",
       });
     });
 
