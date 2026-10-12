@@ -2,6 +2,8 @@
 
 Vercel Chat SDK adapter for [Resend](https://resend.com) email. Bidirectional: receive emails via Resend webhooks, send emails via Resend API.
 
+The adapter works with a Resend [Inbox](https://resend.com/docs/api-reference/inboxes/create-inbox) or with [Receiving](https://resend.com/docs/dashboard/receiving/introduction). Set `inboxId` to use an inbox. See [Inboxes](#inboxes).
+
 ## Install
 
 ```bash
@@ -60,6 +62,8 @@ interface ResendAdapterConfig {
   fromAddress: string;
   /** Display name for the From header. */
   fromName?: string;
+  /** Resend inbox ID. Handles `inbox.email.received` and replies in the inbox thread. */
+  inboxId?: string;
   /** Resend API key. Falls back to RESEND_API_KEY env var. */
   apiKey?: string;
   /** Webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
@@ -69,9 +73,31 @@ interface ResendAdapterConfig {
 
 ## Features
 
+### Inboxes
+
+Set `inboxId` to build the bot on a Resend Inbox. The inbox groups email into threads, and the bot replies inside the thread. Resend sets the recipients and the threading headers.
+
+```ts
+const resend = createResendAdapter({
+  fromAddress: "agent@yourdomain.com", // the inbox address
+  inboxId: "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1",
+});
+```
+
+Subscribe your webhook to `inbox.email.received`. With `inboxId` set, the adapter:
+
+- Handles `inbox.email.received` events for that inbox only. It ignores other inboxes and `email.received` events.
+- Fetches the email with `resend.inboxes.threads.emails.get()`. The webhook payload has no body.
+- Maps each inbox thread to one Chat SDK thread, with the ID `resend:{inboxId}:{threadId}`. The channel is the inbox.
+- Posts with `resend.inboxes.threads.emails.reply()`, to the last received email of the thread. The reply goes to the email's `Reply-To` addresses, or to its sender when it has none. The reply is sent from the inbox address, so `fromName` does not apply to it.
+
+A sender can set `Reply-To` to any address. Check `message.raw.replyTo` before the bot replies with anything sensitive.
+
+`openDM()` still sends with `resend.emails.send()` from `fromAddress`, as without an inbox.
+
 ### Email Threading
 
-Threads are resolved using standard `Message-ID`, `In-Reply-To`, and `References` email headers. Reply chains are automatically grouped into Chat SDK threads.
+Without an inbox, threads are resolved using standard `Message-ID`, `In-Reply-To`, and `References` email headers. Reply chains are automatically grouped into Chat SDK threads.
 
 ### Send Emails Proactively
 
@@ -104,7 +130,7 @@ await thread.post({
 
 ### Attachments
 
-Inbound email attachments are available in `message.raw.attachments` with `filename`, `content_type`, and `url` fields.
+Inbound email attachments are available in `message.raw.attachments` with `filename`, `content_type`, and `url` fields. For an inbox email, each attachment has `id`, `filename` and `size`.
 
 ## Unsupported Operations
 
