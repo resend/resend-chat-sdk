@@ -1,8 +1,10 @@
 import type { StateAdapter } from "chat";
-import type { ResendThreadId } from "./types.js";
+import type { ResendInboxThreadId, ResendThreadId } from "./types.js";
 import { hashMessageId } from "./utils.js";
 
 const WHITESPACE_RE = /\s+/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_TRACKED_MESSAGES = 100;
 
@@ -19,15 +21,22 @@ export class ThreadResolver {
   private readonly messageToThread = new Map<string, string>();
   private readonly threadMessages = new Map<string, string[]>();
   private readonly threadSubjects = new Map<string, string>();
+  private readonly inboxThreadEmails = new Map<string, string>();
 
-  encodeThreadId(id: ResendThreadId): string {
+  encodeThreadId(id: ResendThreadId | ResendInboxThreadId): string {
+    if ("inboxId" in id) {
+      return `resend:${id.inboxId}:${id.threadId}`;
+    }
     return `resend:${id.toAddress}:${id.rootMessageIdHash}`;
   }
 
-  decodeThreadId(threadId: string): ResendThreadId {
+  decodeThreadId(threadId: string): ResendThreadId | ResendInboxThreadId {
     const parts = threadId.split(":");
     if (parts.length !== 3 || parts[0] !== "resend" || !parts[1] || !parts[2]) {
       throw new Error(`Invalid thread ID format: ${threadId}`);
+    }
+    if (UUID_RE.test(parts[1]) && UUID_RE.test(parts[2])) {
+      return { inboxId: parts[1], threadId: parts[2] };
     }
     return {
       toAddress: parts[1],
@@ -101,6 +110,28 @@ export class ThreadResolver {
       "In-Reply-To": lastMessageId,
       References: messages.join(" "),
     };
+  }
+
+  async trackInboxEmail(threadId: string, emailId: string): Promise<void> {
+    if (this.state) {
+      await this.state.set(
+        `resend:inbox-thread-email:${threadId}`,
+        emailId,
+        STATE_TTL_MS
+      );
+      return;
+    }
+    this.inboxThreadEmails.set(threadId, emailId);
+  }
+
+  async getInboxEmail(threadId: string): Promise<string | undefined> {
+    if (this.state) {
+      const emailId = await this.state.get<string>(
+        `resend:inbox-thread-email:${threadId}`
+      );
+      return emailId ?? undefined;
+    }
+    return this.inboxThreadEmails.get(threadId);
   }
 
   async trackSubject(threadId: string, subject: string): Promise<void> {

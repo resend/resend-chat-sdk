@@ -9,6 +9,17 @@ export interface ResendThreadId {
   toAddress: string;
 }
 
+/**
+ * Decoded thread identifier for a thread of a Resend inbox.
+ * Encoded format: `resend:{inboxId}:{threadId}`
+ */
+export interface ResendInboxThreadId {
+  /** The ID of the inbox. Acts as the "channel" identifier. */
+  inboxId: string;
+  /** The ID of the inbox thread. */
+  threadId: string;
+}
+
 export interface ResendRawMessage {
   /** File attachments */
   attachments?: ResendAttachment[];
@@ -24,21 +35,32 @@ export interface ResendRawMessage {
   html?: string;
   /** Resend email ID (e.g., "re_abc123") */
   id: string;
-  /** RFC 822 Message-ID header (e.g., "<abc@mail.resend.dev>") */
+  /** The inbox ID, for an email of an inbox thread */
+  inboxId?: string;
+  /** The inbox thread ID, for an email of an inbox thread */
+  inboxThreadId?: string;
+  /** RFC 822 Message-ID header (e.g., "<abc@mail.resend.dev>"). Empty for an inbox reply, because the reply API returns only the email ID. */
   messageId: string;
+  /** Reply-To addresses, for an email of an inbox thread. An inbox reply goes to these addresses, or to the sender when there are none. */
+  replyTo?: string[];
   /** Email subject line */
   subject: string;
   /** Plain text body */
   text?: string;
-  /** Recipient email addresses */
+  /** Recipient email addresses. Empty for an inbox reply, because the inbox API sets the recipients. */
   to: string[];
 }
 
 export interface ResendAttachment {
   /** Base64-encoded content (outbound emails) */
   content?: string;
+  /** MIME type. `application/octet-stream` for an inbox email, because the inbox API does not return it. */
   contentType: string;
   filename: string;
+  /** Attachment ID (inbox emails) */
+  id?: string;
+  /** Size in bytes (inbox emails) */
+  size?: number;
   /** Download URL (inbound emails) */
   url?: string;
 }
@@ -50,6 +72,11 @@ export interface ResendAdapterConfig {
   fromAddress: string;
   /** Display name for the From header (optional). */
   fromName?: string;
+  /**
+   * Resend inbox ID. When set, the adapter handles `inbox.email.received` events
+   * for this inbox only, ignores `email.received`, and replies in the inbox thread.
+   */
+  inboxId?: string;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
 }
@@ -73,6 +100,38 @@ export interface ResendWebhookPayload {
     }>;
   };
   type: "email.received";
+}
+
+export interface ResendInboxWebhookPayload {
+  created_at: string;
+  data: {
+    source: string;
+    inbox_id: string;
+    thread_id: string;
+    email_id: string;
+  };
+  type: "inbox.email.received";
+}
+
+export interface ResendInboxEmail {
+  attachments: Array<{
+    filename: string | null;
+    id: string;
+    size: number | null;
+  }>;
+  bcc: string[];
+  cc: string[];
+  direction: "inbound" | "outbound";
+  from: string;
+  html: string | null;
+  id: string;
+  message_id: string | null;
+  read: boolean;
+  received_at: string;
+  reply_to: string[];
+  subject: string | null;
+  text: string | null;
+  to: string[];
 }
 
 export interface ResendReceivedEmail {

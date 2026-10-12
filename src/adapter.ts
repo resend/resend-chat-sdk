@@ -11,13 +11,16 @@ import type { Root } from "mdast";
 import { Resend } from "resend";
 import type { CardNode } from "./card-renderer.js";
 import { ResendFormatConverter } from "./format-converter.js";
-import { parseInboundEmail } from "./message-parser.js";
+import { parseInboundEmail, parseInboxEmail } from "./message-parser.js";
 import { renderMessage } from "./message-renderer.js";
 import { ThreadResolver } from "./thread-resolver.js";
 import type {
   ResendAdapterConfig,
+  ResendInboxThreadId,
+  ResendInboxWebhookPayload,
   ResendRawMessage,
   ResendThreadId,
+  ResendWebhookPayload,
 } from "./types.js";
 import {
   generateMessageId,
@@ -44,7 +47,7 @@ class NotImplementedError extends Error {
 }
 
 export class ResendAdapter
-  implements Adapter<ResendThreadId, ResendRawMessage>
+  implements Adapter<ResendThreadId | ResendInboxThreadId, ResendRawMessage>
 {
   readonly name = "resend";
   readonly userName: string;
@@ -82,21 +85,28 @@ export class ResendAdapter
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
-    this.webhookHandler = new WebhookHandler(this.getResend(), webhookSecret);
+    this.webhookHandler = new WebhookHandler(
+      this.getResend(),
+      webhookSecret,
+      this.config.inboxId
+    );
     return Promise.resolve();
   }
 
-  encodeThreadId(id: ResendThreadId): string {
+  encodeThreadId(id: ResendThreadId | ResendInboxThreadId): string {
     return this.threadResolver.encodeThreadId(id);
   }
 
-  decodeThreadId(threadId: string): ResendThreadId {
+  decodeThreadId(threadId: string): ResendThreadId | ResendInboxThreadId {
     return this.threadResolver.decodeThreadId(threadId);
   }
 
   channelIdFromThreadId(threadId: string): string {
-    const { toAddress } = this.decodeThreadId(threadId);
-    return `resend:${toAddress}`;
+    const decoded = this.decodeThreadId(threadId);
+    if ("inboxId" in decoded) {
+      return `resend:${decoded.inboxId}`;
+    }
+    return `resend:${decoded.toAddress}`;
   }
 
   async handleWebhook(
@@ -120,14 +130,55 @@ export class ResendAdapter
       return new Response(null, { status: result.status });
     }
 
-    const email = await this.webhookHandler.fetchEmailContent(
-      result.event.data.email_id
+    if (result.event.type === "inbox.email.received") {
+      await this.handleInboxEmail(result.event, options);
+    } else {
+      await this.handleReceivedEmail(result.event, options);
+    }
+
+    return new Response(null, { status: 200 });
+  }
+
+  private async handleInboxEmail(
+    event: ResendInboxWebhookPayload,
+    options?: WebhookOptions
+  ): Promise<void> {
+    const thread = {
+      inboxId: event.data.inbox_id,
+      threadId: event.data.thread_id,
+    };
+    const email = await this.getWebhookHandler().fetchInboxEmail({
+      ...thread,
+      emailId: event.data.email_id,
+    });
+
+    const threadId = this.threadResolver.encodeThreadId(thread);
+    await this.threadResolver.trackInboxEmail(threadId, email.id);
+    if (email.subject) {
+      await this.threadResolver.trackSubject(threadId, email.subject);
+    }
+
+    const parsed = parseInboxEmail(
+      email,
+      thread,
+      threadId,
+      this.config.fromAddress
+    );
+    this.getChat().processMessage(this, threadId, parsed, options);
+  }
+
+  private async handleReceivedEmail(
+    event: ResendWebhookPayload,
+    options?: WebhookOptions
+  ): Promise<void> {
+    const email = await this.getWebhookHandler().fetchEmailContent(
+      event.data.email_id
     );
 
     // Webhook payload is the authoritative source for attachments —
     // the fetched email may not include them.
-    if (result.event.data.attachments?.length && !email.attachments?.length) {
-      email.attachments = result.event.data.attachments;
+    if (event.data.attachments?.length && !email.attachments?.length) {
+      email.attachments = event.data.attachments;
     }
 
     const senderAddress = parseEmailAddress(email.from);
@@ -148,9 +199,21 @@ export class ResendAdapter
     await this.threadResolver.trackSubject(threadId, email.subject);
 
     const parsed = parseInboundEmail(email, threadId, this.config.fromAddress);
-    this.chat.processMessage(this, threadId, parsed, options);
+    this.getChat().processMessage(this, threadId, parsed, options);
+  }
 
-    return new Response(null, { status: 200 });
+  private getWebhookHandler(): WebhookHandler {
+    if (!this.webhookHandler) {
+      throw new Error("Adapter not initialized. Call initialize() first.");
+    }
+    return this.webhookHandler;
+  }
+
+  private getChat(): ChatInstance {
+    if (!this.chat) {
+      throw new Error("Adapter not initialized. Call initialize() first.");
+    }
+    return this.chat;
   }
 
   async postMessage(
@@ -189,6 +252,10 @@ export class ResendAdapter
 
     const decoded = this.threadResolver.decodeThreadId(threadId);
     const rendered = await renderMessage(normalized);
+
+    if ("inboxId" in decoded) {
+      return this.replyInInboxThread(threadId, decoded, rendered);
+    }
 
     const fromHeader = this.config.fromName
       ? `${this.config.fromName} <${this.config.fromAddress}>`
@@ -232,6 +299,91 @@ export class ResendAdapter
       },
       threadId,
     };
+  }
+
+  private async replyInInboxThread(
+    threadId: string,
+    thread: ResendInboxThreadId,
+    rendered: { html: string; text: string }
+  ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
+    const resend = this.getResend();
+    const emailId =
+      (await this.threadResolver.getInboxEmail(threadId)) ??
+      (await this.findLatestInboxEmail(thread));
+
+    const response = await resend.inboxes.threads.emails.reply({
+      inboxId: thread.inboxId,
+      threadId: thread.threadId,
+      emailId,
+      html: rendered.html,
+      text: rendered.text,
+    });
+
+    if (response.error || !response.data) {
+      throw new Error(
+        `Failed to reply in inbox thread: ${response.error?.message || "Unknown error"}`
+      );
+    }
+
+    const storedSubject = await this.threadResolver.getSubject(threadId);
+
+    return {
+      id: response.data.id,
+      raw: {
+        id: response.data.id,
+        inboxId: thread.inboxId,
+        inboxThreadId: thread.threadId,
+        messageId: "",
+        from: this.config.fromAddress,
+        to: [],
+        subject: replySubject(storedSubject),
+        text: rendered.text,
+        html: rendered.html,
+        createdAt: new Date().toISOString(),
+      },
+      threadId,
+    };
+  }
+
+  private async findLatestInboxEmail(
+    thread: ResendInboxThreadId
+  ): Promise<string> {
+    const resend = this.getResend();
+    let after: string | undefined;
+    let latestInbound: string | undefined;
+    let latest: string | undefined;
+
+    for (;;) {
+      const response = await resend.inboxes.threads.emails.list({
+        inboxId: thread.inboxId,
+        threadId: thread.threadId,
+        limit: 100,
+        ...(after && { after }),
+      });
+      if (response.error || !response.data) {
+        throw new Error(
+          `Failed to list inbox thread emails: ${response.error?.message || "Unknown error"}`
+        );
+      }
+      for (const email of response.data.data) {
+        latest = email.id;
+        if (email.direction === "inbound") {
+          latestInbound = email.id;
+        }
+      }
+      if (!(response.data.has_more && latest)) {
+        break;
+      }
+      after = latest;
+    }
+
+    const emailId = latestInbound ?? latest;
+    if (!emailId) {
+      throw new Error(
+        `Inbox thread ${thread.threadId} has no email to reply to`
+      );
+    }
+    return emailId;
   }
 
   async stream(
@@ -306,6 +458,17 @@ export class ResendAdapter
     metadata: Record<string, unknown>;
   }> {
     const decoded = this.threadResolver.decodeThreadId(threadId);
+    if ("inboxId" in decoded) {
+      return Promise.resolve({
+        id: threadId,
+        channelId: this.channelIdFromThreadId(threadId),
+        metadata: {
+          title: `Inbox thread ${decoded.threadId}`,
+          inboxId: decoded.inboxId,
+          inboxThreadId: decoded.threadId,
+        },
+      });
+    }
     return Promise.resolve({
       id: threadId,
       channelId: this.channelIdFromThreadId(threadId),
@@ -346,4 +509,13 @@ export class ResendAdapter
       attachments: [],
     });
   }
+}
+
+const REPLY_PREFIX_RE = /^re:/i;
+
+function replySubject(subject: string | undefined): string {
+  if (!subject) {
+    return "";
+  }
+  return REPLY_PREFIX_RE.test(subject) ? subject : `Re: ${subject}`;
 }

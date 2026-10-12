@@ -1,15 +1,21 @@
 import type { Resend } from "resend";
-import type { ResendReceivedEmail, ResendWebhookPayload } from "./types.js";
+import type {
+  ResendInboxEmail,
+  ResendInboxWebhookPayload,
+  ResendReceivedEmail,
+  ResendWebhookPayload,
+} from "./types.js";
 
 interface WebhookResult {
-  event: ResendWebhookPayload | null;
+  event: ResendWebhookPayload | ResendInboxWebhookPayload | null;
   status: number;
 }
 
 export class WebhookHandler {
   constructor(
     private readonly resend: Resend,
-    private readonly webhookSecret: string
+    private readonly webhookSecret: string,
+    private readonly inboxId?: string
   ) {}
 
   async parseWebhookRequest(request: Request): Promise<WebhookResult> {
@@ -33,6 +39,20 @@ export class WebhookHandler {
       return { status: 401, event: null };
     }
 
+    if (this.inboxId) {
+      const data = payload.data as { inbox_id?: string } | undefined;
+      if (
+        payload.type !== "inbox.email.received" ||
+        data?.inbox_id !== this.inboxId
+      ) {
+        return { status: 200, event: null };
+      }
+      return {
+        status: 200,
+        event: payload as unknown as ResendInboxWebhookPayload,
+      };
+    }
+
     if (payload.type !== "email.received") {
       return { status: 200, event: null };
     }
@@ -51,5 +71,19 @@ export class WebhookHandler {
       );
     }
     return response.data as unknown as ResendReceivedEmail;
+  }
+
+  async fetchInboxEmail(input: {
+    emailId: string;
+    inboxId: string;
+    threadId: string;
+  }): Promise<ResendInboxEmail> {
+    const response = await this.resend.inboxes.threads.emails.get(input);
+    if (response.error || !response.data) {
+      throw new Error(
+        `Failed to fetch inbox email: ${response.error?.message || "Unknown error"}`
+      );
+    }
+    return response.data as unknown as ResendInboxEmail;
   }
 }
