@@ -89,7 +89,7 @@ Subscribe your webhook to `inbox.email.received`. With `inboxId` set, the adapte
 - Handles `inbox.email.received` events for that inbox only. It ignores other inboxes and `email.received` events.
 - Fetches the email with `resend.inboxes.threads.emails.get()`. The webhook payload has no body.
 - Maps each inbox thread to one Chat SDK thread, with the ID `resend:{inboxId}:{threadId}`. The channel is the inbox.
-- Posts with `resend.inboxes.threads.emails.reply()`, to the last received email of the thread. The reply goes to the email's `Reply-To` addresses, or to its sender when it has none. The reply is sent from the inbox address, so `fromName` does not apply to it.
+- Posts with `resend.inboxes.threads.emails.reply()`, to the last received email of the thread, or to its last email when it has no received email. The reply goes to the `Reply-To` addresses of a received email, or to its sender when it has none. For a sent email, it goes to that email's `to` recipients. The reply is sent from the inbox address, so `fromName` does not apply to it.
 
 A sender can set `Reply-To` to any address. Check `message.raw.replyTo` before the bot replies with anything sensitive.
 
