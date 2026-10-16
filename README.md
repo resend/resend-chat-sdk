@@ -117,9 +117,8 @@ Without an inbox, threads are resolved using standard `Message-ID`, `In-Reply-To
 Use `openDM` to start a new email thread to any address:
 
 ```ts
-const threadId = await chat.adapters.resend.openDM("user@example.com");
-const thread = await chat.thread("resend", threadId);
-await thread.post("Hello from the bot!");
+const threadId = await resend.openDM("user@example.com");
+await resend.postMessage(threadId, "Hello from the bot!");
 ```
 
 ### Card Emails
