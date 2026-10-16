@@ -65,21 +65,38 @@ export interface ResendAttachment {
   url?: string;
 }
 
-export interface ResendAdapterConfig {
+interface ResendAdapterBaseConfig {
   /** Resend API key. Falls back to RESEND_API_KEY env var. */
   apiKey?: string;
   /** Sender email address (required). */
   fromAddress: string;
   /** Display name for the From header (optional). */
   fromName?: string;
-  /**
-   * Resend inbox ID. When set, the adapter handles `inbox.email.received` events
-   * for this inbox only, ignores `email.received`, and replies in the inbox thread.
-   */
-  inboxId?: string;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
 }
+
+/** Selects the Resend inbox. Set `inboxId` or `inboxEmailAddress`, not both. */
+export type ResendInboxConfig =
+  | {
+      /**
+       * Resend inbox ID. When set, the adapter handles `inbox.email.received` events
+       * for this inbox only, ignores `email.received`, and replies in the inbox thread.
+       */
+      inboxId?: string;
+      inboxEmailAddress?: never;
+    }
+  | {
+      inboxId?: never;
+      /**
+       * Resend inbox email address, such as `support@example.com`. It works as `inboxId` does.
+       * On the first `inbox.email.received` event, the adapter gets the inbox ID with
+       * `resend.inboxes.get()` and keeps it.
+       */
+      inboxEmailAddress?: string;
+    };
+
+export type ResendAdapterConfig = ResendAdapterBaseConfig & ResendInboxConfig;
 
 export interface ResendWebhookPayload {
   created_at: string;

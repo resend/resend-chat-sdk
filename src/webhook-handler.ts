@@ -1,4 +1,4 @@
-import type { Resend } from "resend";
+import type { InboxSelector, Resend } from "resend";
 import type {
   ResendInboxEmail,
   ResendInboxWebhookPayload,
@@ -12,10 +12,12 @@ interface WebhookResult {
 }
 
 export class WebhookHandler {
+  private resolvedInboxId: Promise<string> | null = null;
+
   constructor(
     private readonly resend: Resend,
     private readonly webhookSecret: string,
-    private readonly inboxId?: string
+    private readonly inbox?: InboxSelector
   ) {}
 
   async parseWebhookRequest(request: Request): Promise<WebhookResult> {
@@ -39,12 +41,12 @@ export class WebhookHandler {
       return { status: 401, event: null };
     }
 
-    if (this.inboxId) {
+    if (this.inbox) {
+      if (payload.type !== "inbox.email.received") {
+        return { status: 200, event: null };
+      }
       const data = payload.data as { inbox_id?: string } | undefined;
-      if (
-        payload.type !== "inbox.email.received" ||
-        data?.inbox_id !== this.inboxId
-      ) {
+      if (data?.inbox_id !== (await this.getInboxId(this.inbox))) {
         return { status: 200, event: null };
       }
       return {
@@ -61,6 +63,34 @@ export class WebhookHandler {
       status: 200,
       event: payload as unknown as ResendWebhookPayload,
     };
+  }
+
+  private getInboxId(inbox: InboxSelector): Promise<string> {
+    if (inbox.inboxId !== undefined) {
+      return Promise.resolve(inbox.inboxId);
+    }
+    if (!this.resolvedInboxId) {
+      this.resolvedInboxId = this.fetchInboxId(inbox.emailAddress).catch(
+        (error: unknown) => {
+          this.resolvedInboxId = null;
+          throw error;
+        }
+      );
+    }
+    return this.resolvedInboxId;
+  }
+
+  private async fetchInboxId(emailAddress: string): Promise<string> {
+    const response = await this.resend.inboxes.get(emailAddress);
+    if (response.error?.statusCode === 404) {
+      throw new Error(`Inbox ${emailAddress} does not exist`);
+    }
+    if (response.error || !response.data) {
+      throw new Error(
+        `Failed to get inbox ${emailAddress}: ${response.error?.message || "Unknown error"}`
+      );
+    }
+    return response.data.id;
   }
 
   async fetchEmailContent(emailId: string): Promise<ResendReceivedEmail> {

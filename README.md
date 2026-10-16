@@ -2,7 +2,7 @@
 
 Vercel Chat SDK adapter for [Resend](https://resend.com) email. Bidirectional: receive emails via Resend webhooks, send emails via Resend API.
 
-The adapter works with a Resend [Inbox](https://resend.com/docs/api-reference/inboxes/create-inbox) or with [Receiving](https://resend.com/docs/dashboard/receiving/introduction). Set `inboxId` to use an inbox. See [Inboxes](#inboxes).
+The adapter works with a Resend [Inbox](https://resend.com/docs/api-reference/inboxes/create-inbox) or with [Receiving](https://resend.com/docs/dashboard/receiving/introduction). Set `inboxId` or `inboxEmailAddress` to use an inbox. See [Inboxes](#inboxes).
 
 ## Install
 
@@ -64,6 +64,8 @@ interface ResendAdapterConfig {
   fromName?: string;
   /** Resend inbox ID. Handles `inbox.email.received` and replies in the inbox thread. */
   inboxId?: string;
+  /** Resend inbox email address. Use it in place of `inboxId`, not with it. */
+  inboxEmailAddress?: string;
   /** Resend API key. Falls back to RESEND_API_KEY env var. */
   apiKey?: string;
   /** Webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
@@ -75,7 +77,7 @@ interface ResendAdapterConfig {
 
 ### Inboxes
 
-Set `inboxId` to build the bot on a Resend Inbox. The inbox groups email into threads, and the bot replies inside the thread. Resend sets the recipients and the threading headers.
+Set `inboxId` or `inboxEmailAddress` to build the bot on a Resend Inbox. The inbox groups email into threads, and the bot replies inside the thread. Resend sets the recipients and the threading headers.
 
 ```ts
 const resend = createResendAdapter({
@@ -84,7 +86,18 @@ const resend = createResendAdapter({
 });
 ```
 
-Subscribe your webhook to `inbox.email.received`. With `inboxId` set, the adapter:
+You can also select the inbox by its email address:
+
+```ts
+const resend = createResendAdapter({
+  fromAddress: "agent@yourdomain.com",
+  inboxEmailAddress: "agent@yourdomain.com",
+});
+```
+
+Set `inboxId` or `inboxEmailAddress`, not both. The adapter throws an error when you set both. The `inbox.email.received` payload identifies the inbox by its ID. With `inboxEmailAddress`, the adapter gets the inbox ID with `resend.inboxes.get()` on the first `inbox.email.received` event and keeps it. If the inbox does not exist, `handleWebhook()` throws an error. Thread IDs use the inbox ID in both cases.
+
+Subscribe your webhook to `inbox.email.received`. With an inbox set, the adapter:
 
 - Handles `inbox.email.received` events for that inbox only. It ignores other inboxes and `email.received` events.
 - Fetches the email with `resend.inboxes.threads.emails.get()`. The webhook payload has no body.

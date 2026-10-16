@@ -58,7 +58,7 @@
     "hast-util-to-html": "^9.0.5",
     "mdast-util-to-hast": "^13.2.1",
     "react-email": "^6.0.0",
-    "resend": "^6.33.0"
+    "resend": "^6.34.1"
   },
   "devDependencies": {
     "@actions/core": "3.0.0",

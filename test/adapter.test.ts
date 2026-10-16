@@ -17,6 +17,7 @@ const mockVerify = vi.fn();
 const mockInboxEmailGet = vi.fn();
 const mockInboxEmailList = vi.fn();
 const mockInboxEmailReply = vi.fn();
+const mockInboxGet = vi.fn();
 
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(() => ({
@@ -30,6 +31,7 @@ vi.mock("resend", () => ({
       verify: mockVerify,
     },
     inboxes: {
+      get: mockInboxGet,
       threads: {
         emails: {
           get: mockInboxEmailGet,
@@ -868,6 +870,14 @@ describe("ResendAdapter with an inbox", () => {
     );
   });
 
+  it("does not get the inbox when inboxId is set", async () => {
+    mockVerify.mockReturnValue(inboxPayload);
+
+    await adapter.handleWebhook(webhookRequest(inboxPayload));
+
+    expect(mockInboxGet).not.toHaveBeenCalled();
+  });
+
   it("keeps sending openDM threads with the emails API", async () => {
     const threadId = await adapter.openDM("user@example.com");
 
@@ -877,5 +887,122 @@ describe("ResendAdapter with an inbox", () => {
       expect.objectContaining({ to: ["user@example.com"] })
     );
     expect(mockInboxEmailReply).not.toHaveBeenCalled();
+  });
+});
+
+describe("ResendAdapter with an inbox email address", () => {
+  const INBOX_ID = "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1";
+  const INBOX_ADDRESS = "agent@example.com";
+  const THREAD_ID = "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90";
+  const EMAIL_ID = "4ef9a417-02e9-4d39-ad75-9611e0fcc33c";
+
+  const inboxPayload = {
+    type: "inbox.email.received",
+    created_at: "2026-08-05T14:03:12.000Z",
+    data: {
+      source: "system",
+      inbox_id: INBOX_ID,
+      thread_id: THREAD_ID,
+      email_id: EMAIL_ID,
+    },
+  };
+
+  function webhookRequest(payload: unknown): Request {
+    return new Request("https://example.com/webhook", {
+      method: "POST",
+      headers: {
+        "svix-id": "msg_123",
+        "svix-timestamp": "12345",
+        "svix-signature": "v1,valid",
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  let adapter: ResendAdapter;
+  let mockChat: { processMessage: ReturnType<typeof vi.fn> };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockInboxGet.mockResolvedValue({
+      data: { object: "inbox", id: INBOX_ID, email_address: INBOX_ADDRESS },
+      error: null,
+    });
+    mockInboxEmailGet.mockResolvedValue({
+      data: {
+        id: EMAIL_ID,
+        direction: "inbound",
+        from: "ada@example.org",
+        to: [INBOX_ADDRESS],
+        cc: [],
+        bcc: [],
+        reply_to: [],
+        subject: "Refund for order 1041",
+        message_id: "<1041@example.org>",
+        html: null,
+        text: "Could I get a refund?",
+        attachments: [],
+        read: false,
+        received_at: "2026-08-05T14:03:11.229Z",
+      },
+      error: null,
+    });
+    adapter = new ResendAdapter({
+      ...config,
+      fromAddress: INBOX_ADDRESS,
+      inboxEmailAddress: INBOX_ADDRESS,
+    });
+    mockChat = { processMessage: vi.fn() };
+    await adapter.initialize(mockChat);
+  });
+
+  it("resolves the address and processes the email in the inbox thread", async () => {
+    mockVerify.mockReturnValue(inboxPayload);
+
+    const result = await adapter.handleWebhook(webhookRequest(inboxPayload));
+
+    expect(result.status).toBe(200);
+    expect(mockInboxGet).toHaveBeenCalledWith(INBOX_ADDRESS);
+    expect(mockInboxEmailGet).toHaveBeenCalledWith({
+      inboxId: INBOX_ID,
+      threadId: THREAD_ID,
+      emailId: EMAIL_ID,
+    });
+    const [, threadIdArg] = mockChat.processMessage.mock.calls[0];
+    expect(threadIdArg).toBe(`resend:${INBOX_ID}:${THREAD_ID}`);
+  });
+
+  it("gets the inbox once", async () => {
+    mockVerify.mockReturnValue(inboxPayload);
+
+    await adapter.handleWebhook(webhookRequest(inboxPayload));
+    await adapter.handleWebhook(webhookRequest(inboxPayload));
+
+    expect(mockInboxGet).toHaveBeenCalledOnce();
+    expect(mockChat.processMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws when the inbox does not exist", async () => {
+    mockVerify.mockReturnValue(inboxPayload);
+    mockInboxGet.mockResolvedValue({
+      data: null,
+      error: { message: "Inbox not found", name: "not_found", statusCode: 404 },
+    });
+
+    await expect(
+      adapter.handleWebhook(webhookRequest(inboxPayload))
+    ).rejects.toThrow(`Inbox ${INBOX_ADDRESS} does not exist`);
+    expect(mockChat.processMessage).not.toHaveBeenCalled();
+  });
+
+  it("throws when both inboxId and inboxEmailAddress are set", () => {
+    expect(
+      () =>
+        new ResendAdapter({
+          ...config,
+          inboxId: INBOX_ID,
+          inboxEmailAddress: INBOX_ADDRESS,
+        } as unknown as ResendAdapterConfig)
+    ).toThrow("Set inboxId or inboxEmailAddress, not both.");
   });
 });

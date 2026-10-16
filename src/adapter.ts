@@ -8,7 +8,7 @@ import type {
 } from "chat";
 import { Message, parseMarkdown } from "chat";
 import type { Root } from "mdast";
-import { Resend } from "resend";
+import { type InboxSelector, Resend } from "resend";
 import type { CardNode } from "./card-renderer.js";
 import { ResendFormatConverter } from "./format-converter.js";
 import { parseInboundEmail, parseInboxEmail } from "./message-parser.js";
@@ -60,6 +60,9 @@ export class ResendAdapter
   private webhookHandler: WebhookHandler | null = null;
 
   constructor(config: ResendAdapterConfig) {
+    if (config.inboxId && config.inboxEmailAddress) {
+      throw new Error("Set inboxId or inboxEmailAddress, not both.");
+    }
     this.config = config;
     this.userName = config.fromAddress;
   }
@@ -88,9 +91,19 @@ export class ResendAdapter
     this.webhookHandler = new WebhookHandler(
       this.getResend(),
       webhookSecret,
-      this.config.inboxId
+      this.inboxSelector()
     );
     return Promise.resolve();
+  }
+
+  private inboxSelector(): InboxSelector | undefined {
+    if (this.config.inboxEmailAddress) {
+      return { emailAddress: this.config.inboxEmailAddress };
+    }
+    if (this.config.inboxId) {
+      return { inboxId: this.config.inboxId };
+    }
+    return undefined;
   }
 
   encodeThreadId(id: ResendThreadId | ResendInboxThreadId): string {

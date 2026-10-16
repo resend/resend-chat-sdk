@@ -5,16 +5,21 @@ import { WebhookHandler } from "../src/webhook-handler.js";
 const mockVerify = vi.fn();
 const mockReceivingGet = vi.fn();
 const mockInboxEmailGet = vi.fn();
+const mockInboxGet = vi.fn();
 
 const mockResend = {
   webhooks: { verify: mockVerify },
   emails: { receiving: { get: mockReceivingGet } },
-  inboxes: { threads: { emails: { get: mockInboxEmailGet } } },
+  inboxes: {
+    get: mockInboxGet,
+    threads: { emails: { get: mockInboxEmailGet } },
+  },
 };
 
 const INBOX_ID = "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1";
 const THREAD_ID = "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90";
 const EMAIL_ID = "4ef9a417-02e9-4d39-ad75-9611e0fcc33c";
+const INBOX_ADDRESS = "agent@example.com";
 
 const inboxPayload = {
   type: "inbox.email.received",
@@ -159,11 +164,9 @@ describe("WebhookHandler", () => {
     let inboxHandler: WebhookHandler;
 
     beforeEach(() => {
-      inboxHandler = new WebhookHandler(
-        mockResend as any,
-        "whsec_test123",
-        INBOX_ID
-      );
+      inboxHandler = new WebhookHandler(mockResend as any, "whsec_test123", {
+        inboxId: INBOX_ID,
+      });
     });
 
     it("returns the event for inbox.email.received on the inbox", async () => {
@@ -213,6 +216,114 @@ describe("WebhookHandler", () => {
         signedRequest(inboxPayload)
       );
       expect(result.status).toBe(401);
+    });
+  });
+
+  describe("inbox mode with an email address", () => {
+    let inboxHandler: WebhookHandler;
+
+    beforeEach(() => {
+      mockInboxGet.mockResolvedValue({
+        data: { object: "inbox", id: INBOX_ID, email_address: INBOX_ADDRESS },
+        error: null,
+      });
+      inboxHandler = new WebhookHandler(mockResend as any, "whsec_test123", {
+        emailAddress: INBOX_ADDRESS,
+      });
+    });
+
+    it("resolves the address to the inbox ID and returns the event", async () => {
+      mockVerify.mockReturnValue(inboxPayload);
+
+      const result = await inboxHandler.parseWebhookRequest(
+        signedRequest(inboxPayload)
+      );
+
+      expect(mockInboxGet).toHaveBeenCalledWith(INBOX_ADDRESS);
+      expect(result.status).toBe(200);
+      expect(result.event).toEqual(inboxPayload);
+    });
+
+    it("gets the inbox once for many events", async () => {
+      mockVerify.mockReturnValue(inboxPayload);
+
+      await Promise.all([
+        inboxHandler.parseWebhookRequest(signedRequest(inboxPayload)),
+        inboxHandler.parseWebhookRequest(signedRequest(inboxPayload)),
+      ]);
+      await inboxHandler.parseWebhookRequest(signedRequest(inboxPayload));
+
+      expect(mockInboxGet).toHaveBeenCalledOnce();
+    });
+
+    it("ignores inbox.email.received for another inbox", async () => {
+      const payload = {
+        ...inboxPayload,
+        data: {
+          ...inboxPayload.data,
+          inbox_id: "00000000-0000-4000-8000-000000000000",
+        },
+      };
+      mockVerify.mockReturnValue(payload);
+
+      const result = await inboxHandler.parseWebhookRequest(
+        signedRequest(payload)
+      );
+
+      expect(result.status).toBe(200);
+      expect(result.event).toBeNull();
+    });
+
+    it("ignores email.received without a call to get the inbox", async () => {
+      const payload = { type: "email.received", data: { email_id: "re_1" } };
+      mockVerify.mockReturnValue(payload);
+
+      const result = await inboxHandler.parseWebhookRequest(
+        signedRequest(payload)
+      );
+
+      expect(result.event).toBeNull();
+      expect(mockInboxGet).not.toHaveBeenCalled();
+    });
+
+    it("throws when the inbox does not exist", async () => {
+      mockVerify.mockReturnValue(inboxPayload);
+      mockInboxGet.mockResolvedValue({
+        data: null,
+        error: {
+          message: "Inbox not found",
+          name: "not_found",
+          statusCode: 404,
+        },
+      });
+
+      await expect(
+        inboxHandler.parseWebhookRequest(signedRequest(inboxPayload))
+      ).rejects.toThrow(`Inbox ${INBOX_ADDRESS} does not exist`);
+    });
+
+    it("throws on another error and tries again on the next event", async () => {
+      mockVerify.mockReturnValue(inboxPayload);
+      mockInboxGet.mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: "Internal server error",
+          name: "internal_server_error",
+          statusCode: 500,
+        },
+      });
+
+      await expect(
+        inboxHandler.parseWebhookRequest(signedRequest(inboxPayload))
+      ).rejects.toThrow(
+        `Failed to get inbox ${INBOX_ADDRESS}: Internal server error`
+      );
+      const result = await inboxHandler.parseWebhookRequest(
+        signedRequest(inboxPayload)
+      );
+
+      expect(mockInboxGet).toHaveBeenCalledTimes(2);
+      expect(result.event).toEqual(inboxPayload);
     });
   });
 
