@@ -7,7 +7,7 @@ The adapter works with a Resend [Inbox](https://resend.com/docs/api-reference/in
 ## Install
 
 ```bash
-pnpm add @resend/chat-sdk-adapter chat @chat-adapter/shared
+pnpm add @resend/chat-sdk-adapter chat @chat-adapter/shared @chat-adapter/state-memory
 ```
 
 ## Quick Start
@@ -126,7 +126,7 @@ await resend.postMessage(threadId, "Hello from the bot!");
 
 ### Card Emails
 
-Send rich HTML emails using Chat SDK Card elements, rendered via `@react-email/components`:
+Send HTML emails with Chat SDK card elements. The adapter renders them with [React Email](https://react.email). Put a `link-button` inside an `actions` element:
 
 ```ts
 await thread.post({
@@ -136,7 +136,12 @@ await thread.post({
     children: [
       { type: "text", content: "Your order #1234 has been shipped." },
       { type: "divider" },
-      { type: "link-button", label: "Track Order", url: "https://example.com/track/1234" },
+      {
+        type: "actions",
+        children: [
+          { type: "link-button", label: "Track Order", url: "https://example.com/track/1234" },
+        ],
+      },
     ],
   },
   fallbackText: "Order #1234 confirmed",
@@ -145,7 +150,21 @@ await thread.post({
 
 ### Attachments
 
-Inbound email attachments are available in `message.raw.attachments` with `filename`, `content_type`, and `url` fields. For an inbox email, each attachment has `id`, `filename` and `size`.
+Inbound email attachments are in `message.raw.attachments`, as `ResendAttachment` objects. The adapter does not download the attachment content.
+
+- An attachment of an `email.received` email has `filename` and `contentType`.
+- An attachment of an inbox email has `id`, `filename`, `size` and `contentType`. The inbox API does not return the MIME type, so `contentType` is always `application/octet-stream`.
+
+```ts
+import type { ResendRawMessage } from "@resend/chat-sdk-adapter";
+
+chat.onNewMention(async (thread, message) => {
+  const raw = message.raw as ResendRawMessage;
+  for (const attachment of raw.attachments ?? []) {
+    console.log(attachment.filename, attachment.contentType, attachment.size);
+  }
+});
+```
 
 ## Unsupported Operations
 
