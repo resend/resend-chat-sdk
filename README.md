@@ -57,21 +57,24 @@ Forward Resend webhooks to your server's `/webhook` endpoint. See [examples/basi
 ### `ResendAdapterConfig`
 
 ```ts
-interface ResendAdapterConfig {
+type ResendAdapterConfig = {
   /** Sender email address (required). */
   fromAddress: string;
   /** Display name for the From header. */
   fromName?: string;
-  /** Resend inbox ID. Handles `inbox.email.received` and replies in the inbox thread. */
-  inboxId?: string;
-  /** Resend inbox email address. Use it in place of `inboxId`, not with it. */
-  inboxEmailAddress?: string;
   /** Resend API key. Falls back to RESEND_API_KEY env var. */
   apiKey?: string;
   /** Webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
-}
+} & (
+  /** Resend inbox ID. Handles `inbox.email.received` and replies in the inbox thread. */
+  | { inboxId?: string; inboxEmailAddress?: never }
+  /** Resend inbox email address. Works as `inboxId` does. */
+  | { inboxId?: never; inboxEmailAddress?: string }
+);
 ```
+
+Set `inboxId` or `inboxEmailAddress`, not both. Setting both is a type error.
 
 ## Features
 
