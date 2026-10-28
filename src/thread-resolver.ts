@@ -8,6 +8,15 @@ const UUID_RE =
 const STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_TRACKED_MESSAGES = 100;
 
+/** A thread that openDM() opened in an inbox. */
+export interface NewInboxThread {
+  /** The draft of the first email, once it is sent. */
+  draftId?: string;
+  /** The Resend thread, once the inbox.draft.sent event arrives. */
+  resendThreadId?: string;
+  toAddress: string;
+}
+
 interface ResolveInput {
   inReplyTo: string | undefined;
   messageId: string;
@@ -22,6 +31,7 @@ export class ThreadResolver {
   private readonly threadMessages = new Map<string, string[]>();
   private readonly threadSubjects = new Map<string, string>();
   private readonly inboxThreadEmails = new Map<string, string>();
+  private readonly values = new Map<string, string>();
 
   encodeThreadId(id: ResendThreadId | ResendInboxThreadId): string {
     if ("inboxId" in id) {
@@ -134,6 +144,72 @@ export class ThreadResolver {
     return this.inboxThreadEmails.get(threadId);
   }
 
+  /**
+   * Track a thread that openDM() opened in an inbox. Resend creates the thread
+   * when it sends the first email, so the chat thread ID is a placeholder until
+   * linkInboxDraft() links it to the Resend thread.
+   */
+  async trackNewInboxThread(
+    threadId: string,
+    toAddress: string
+  ): Promise<void> {
+    await this.setValue(`resend:new-inbox-thread-to:${threadId}`, toAddress);
+  }
+
+  async getNewInboxThread(
+    threadId: string
+  ): Promise<NewInboxThread | undefined> {
+    const toAddress = await this.getValue(
+      `resend:new-inbox-thread-to:${threadId}`
+    );
+    if (!toAddress) {
+      return undefined;
+    }
+    const [draftId, resendThreadId] = await Promise.all([
+      this.getValue(`resend:new-inbox-thread-draft:${threadId}`),
+      this.getValue(`resend:new-inbox-thread-id:${threadId}`),
+    ]);
+    return { toAddress, draftId, resendThreadId };
+  }
+
+  /** Track the draft of the first email of a new inbox thread, before it is sent. */
+  async trackInboxDraft(draftId: string, threadId: string): Promise<void> {
+    await this.setValue(`resend:inbox-draft-thread:${draftId}`, threadId);
+  }
+
+  async markNewInboxThreadSent(
+    threadId: string,
+    draftId: string
+  ): Promise<void> {
+    await this.setValue(`resend:new-inbox-thread-draft:${threadId}`, draftId);
+  }
+
+  /**
+   * Link the Resend thread of a sent draft to the chat thread of openDM().
+   * Returns `false` when the draft is not the first email of a new inbox thread.
+   */
+  async linkInboxDraft(
+    draftId: string,
+    resendThreadId: string
+  ): Promise<boolean> {
+    const threadId = await this.getValue(
+      `resend:inbox-draft-thread:${draftId}`
+    );
+    if (!threadId) {
+      return false;
+    }
+    await Promise.all([
+      this.setValue(`resend:new-inbox-thread-id:${threadId}`, resendThreadId),
+      this.setValue(`resend:inbox-chat-thread:${resendThreadId}`, threadId),
+    ]);
+    return true;
+  }
+
+  /** Get the chat thread ID of a Resend thread that openDM() opened. */
+  getChatThreadId(resendThreadId: string): Promise<string | undefined> {
+    return this.getValue(`resend:inbox-chat-thread:${resendThreadId}`);
+  }
+
   async trackSubject(threadId: string, subject: string): Promise<void> {
     if (this.state) {
       await this.state.setIfNotExists(
@@ -157,6 +233,21 @@ export class ThreadResolver {
       return subject ?? undefined;
     }
     return this.threadSubjects.get(threadId);
+  }
+
+  private async getValue(key: string): Promise<string | undefined> {
+    if (this.state) {
+      return (await this.state.get<string>(key)) ?? undefined;
+    }
+    return this.values.get(key);
+  }
+
+  private async setValue(key: string, value: string): Promise<void> {
+    if (this.state) {
+      await this.state.set(key, value, STATE_TTL_MS);
+      return;
+    }
+    this.values.set(key, value);
   }
 
   /**

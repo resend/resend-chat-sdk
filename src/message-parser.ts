@@ -71,6 +71,8 @@ export function parseInboxEmail(
   const authorEmail = parseEmailAddress(email.from);
   const authorName = extractDisplayName(email.from);
   const text = email.text || stripHtml(email.html || "");
+  // An inbox sends an outbound email, from the inbox address.
+  const isOutbound = email.direction === "outbound";
 
   const raw: ResendRawMessage = {
     id: email.id,
@@ -103,8 +105,8 @@ export function parseInboxEmail(
       userId: authorEmail,
       userName: authorEmail,
       fullName: authorName,
-      isBot: false,
-      isMe: authorEmail === fromAddress.toLowerCase(),
+      isBot: isOutbound,
+      isMe: isOutbound || authorEmail === fromAddress.toLowerCase(),
     },
     metadata: {
       dateSent: new Date(email.received_at),
@@ -115,7 +117,7 @@ export function parseInboxEmail(
       name: a.filename ?? undefined,
       size: a.size ?? undefined,
     })),
-    isMention: true,
+    isMention: !isOutbound,
   });
 }
 

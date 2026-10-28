@@ -1,4 +1,5 @@
 import { type StateAdapter, ThreadImpl } from "chat";
+import { Resend } from "resend";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendAdapter } from "../src/adapter.js";
 import { createResendAdapter } from "../src/index.js";
@@ -18,6 +19,8 @@ const mockInboxEmailGet = vi.fn();
 const mockInboxEmailList = vi.fn();
 const mockInboxEmailReply = vi.fn();
 const mockInboxGet = vi.fn();
+const mockDraftCreate = vi.fn();
+const mockDraftSend = vi.fn();
 
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(() => ({
@@ -32,6 +35,10 @@ vi.mock("resend", () => ({
     },
     inboxes: {
       get: mockInboxGet,
+      drafts: {
+        create: mockDraftCreate,
+        send: mockDraftSend,
+      },
       threads: {
         emails: {
           get: mockInboxEmailGet,
@@ -119,6 +126,51 @@ describe("ResendAdapter", () => {
       if (env) {
         process.env.RESEND_API_KEY = env;
       }
+    });
+
+    it("does not call an apiKey function", async () => {
+      const apiKey = vi.fn().mockResolvedValue("re_lazy");
+      const lazyAdapter = new ResendAdapter({ ...config, apiKey });
+
+      await lazyAdapter.initialize({ processMessage: vi.fn() });
+      expect(apiKey).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("apiKey function", () => {
+    it("resolves the key on each call and creates a client when it changes", async () => {
+      const apiKey = vi
+        .fn()
+        .mockResolvedValueOnce("re_first")
+        .mockResolvedValueOnce("re_first")
+        .mockResolvedValueOnce("re_rotated");
+      const lazyAdapter = new ResendAdapter({ ...config, apiKey });
+      await lazyAdapter.initialize({ processMessage: vi.fn() });
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      await lazyAdapter.postMessage(threadId, { text: "One" });
+      await lazyAdapter.postMessage(threadId, { text: "Two" });
+      await lazyAdapter.postMessage(threadId, { text: "Three" });
+
+      expect(apiKey).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(Resend).mock.calls).toEqual([
+        ["re_first"],
+        ["re_rotated"],
+      ]);
+      expect(mockSend).toHaveBeenCalledTimes(3);
+    });
+
+    it("throws when the function returns an empty key", async () => {
+      const lazyAdapter = new ResendAdapter({
+        ...config,
+        apiKey: () => "",
+      });
+
+      await expect(
+        lazyAdapter.postMessage("resend:user@example.com:abcdef0123456789", {
+          text: "Hello",
+        })
+      ).rejects.toThrow("empty Resend API key");
     });
   });
 
@@ -563,6 +615,67 @@ describe("ResendAdapter", () => {
       }
     });
 
+    it("uses webhookVerifier without a webhook secret", async () => {
+      const webhookVerifier = vi.fn().mockResolvedValue(true);
+      const verifierAdapter = new ResendAdapter({
+        ...config,
+        webhookSecret: undefined,
+        webhookVerifier,
+      });
+      const env = process.env.RESEND_WEBHOOK_SECRET;
+      process.env.RESEND_WEBHOOK_SECRET = "";
+
+      const mockChat = { processMessage: vi.fn() };
+      await verifierAdapter.initialize(mockChat);
+
+      const webhookPayload = {
+        type: "email.received",
+        created_at: "2025-01-15T10:30:00Z",
+        data: {
+          email_id: "re_forwarded_123",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Forwarded webhook email",
+          message_id: "<forwarded-msg-1@mail.resend.dev>",
+        },
+      };
+      mockReceivingGet.mockResolvedValue({
+        data: {
+          id: "re_forwarded_123",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Forwarded webhook email",
+          message_id: "<forwarded-msg-1@mail.resend.dev>",
+          text: "Hello from a proxy!",
+          headers: {},
+          created_at: "2025-01-15T10:30:00Z",
+        },
+      });
+
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: { authorization: "Bearer forwarded" },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      const result = await verifierAdapter.handleWebhook(request);
+
+      expect(result.status).toBe(200);
+      expect(webhookVerifier).toHaveBeenCalledWith(
+        request,
+        JSON.stringify(webhookPayload)
+      );
+      expect(mockVerify).not.toHaveBeenCalled();
+      expect(mockChat.processMessage).toHaveBeenCalledOnce();
+      expect(mockChat.processMessage.mock.calls[0][2].text).toBe(
+        "Hello from a proxy!"
+      );
+
+      if (env) {
+        process.env.RESEND_WEBHOOK_SECRET = env;
+      }
+    });
+
     it("processes webhook and calls chat.processMessage with correct args", async () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);
@@ -878,7 +991,205 @@ describe("ResendAdapter with an inbox", () => {
     expect(mockInboxGet).not.toHaveBeenCalled();
   });
 
-  it("keeps sending openDM threads with the emails API", async () => {
+  describe("fetchMessages", () => {
+    function threadEmail(id: string, direction = "inbound") {
+      return {
+        ...inboxEmail,
+        id,
+        direction,
+        ...(direction === "outbound" && {
+          from: "agent@example.com",
+          to: ["ada@example.org"],
+        }),
+        text: `Email ${id}`,
+      };
+    }
+
+    function listPage(ids: string[], hasMore: boolean) {
+      return {
+        data: {
+          object: "list",
+          has_more: hasMore,
+          data: ids.map((id) => threadEmail(id)),
+        },
+        error: null,
+      };
+    }
+
+    it("returns the newest emails and a cursor to older emails by default", async () => {
+      mockInboxEmailList
+        .mockResolvedValueOnce(listPage(["email_1", "email_2"], true))
+        .mockResolvedValueOnce(listPage(["email_3"], false));
+
+      const result = await adapter.fetchMessages(CHAT_THREAD_ID, { limit: 2 });
+
+      expect(mockInboxEmailList).toHaveBeenNthCalledWith(1, {
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        limit: 100,
+      });
+      expect(mockInboxEmailList).toHaveBeenNthCalledWith(2, {
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        limit: 100,
+        after: "email_2",
+      });
+      expect(result.messages.map((m) => m.id)).toEqual(["email_2", "email_3"]);
+      expect(result.messages[0].threadId).toBe(CHAT_THREAD_ID);
+      expect(result.messages[0].text).toBe("Email email_2");
+      expect(result.nextCursor).toBe("email_2");
+    });
+
+    it("has no cursor when the newest emails are the whole thread", async () => {
+      mockInboxEmailList.mockResolvedValueOnce(
+        listPage(["email_1", "email_2"], false)
+      );
+
+      const result = await adapter.fetchMessages(CHAT_THREAD_ID);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.nextCursor).toBeUndefined();
+    });
+
+    it("fetches older emails before the cursor", async () => {
+      mockInboxEmailList.mockResolvedValueOnce(
+        listPage(["email_3", "email_4"], true)
+      );
+
+      const result = await adapter.fetchMessages(CHAT_THREAD_ID, {
+        limit: 2,
+        cursor: "email_5",
+      });
+
+      expect(mockInboxEmailList).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        limit: 2,
+        before: "email_5",
+      });
+      expect(result.messages.map((m) => m.id)).toEqual(["email_3", "email_4"]);
+      expect(result.nextCursor).toBe("email_3");
+    });
+
+    it("fetches forward from the oldest email, after the cursor", async () => {
+      mockInboxEmailList
+        .mockResolvedValueOnce(listPage(["email_1", "email_2"], true))
+        .mockResolvedValueOnce(listPage(["email_3"], false));
+
+      const first = await adapter.fetchMessages(CHAT_THREAD_ID, {
+        limit: 2,
+        direction: "forward",
+      });
+      const second = await adapter.fetchMessages(CHAT_THREAD_ID, {
+        limit: 2,
+        direction: "forward",
+        cursor: first.nextCursor,
+      });
+
+      expect(mockInboxEmailList).toHaveBeenNthCalledWith(1, {
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        limit: 2,
+      });
+      expect(mockInboxEmailList).toHaveBeenNthCalledWith(2, {
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        limit: 2,
+        after: "email_2",
+      });
+      expect(first.nextCursor).toBe("email_2");
+      expect(second.messages.map((m) => m.id)).toEqual(["email_3"]);
+      expect(second.nextCursor).toBeUndefined();
+    });
+
+    it("limits a page to 100 emails", async () => {
+      mockInboxEmailList.mockResolvedValueOnce(listPage([], false));
+
+      await adapter.fetchMessages(CHAT_THREAD_ID, {
+        limit: 500,
+        direction: "forward",
+      });
+
+      expect(mockInboxEmailList).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 100 })
+      );
+    });
+
+    it("marks outbound emails as sent by the bot", async () => {
+      mockInboxEmailList.mockResolvedValueOnce({
+        data: {
+          object: "list",
+          has_more: false,
+          data: [threadEmail("email_1"), threadEmail("email_2", "outbound")],
+        },
+        error: null,
+      });
+
+      const { messages } = await adapter.fetchMessages(CHAT_THREAD_ID);
+
+      expect(messages[0].author).toMatchObject({ isMe: false, isBot: false });
+      expect(messages[0].isMention).toBe(true);
+      expect(messages[1].author).toMatchObject({ isMe: true, isBot: true });
+      expect(messages[1].isMention).toBe(false);
+    });
+
+    it("throws when the list API returns an error", async () => {
+      mockInboxEmailList.mockResolvedValueOnce({
+        data: null,
+        error: { message: "Thread not found" },
+      });
+
+      await expect(adapter.fetchMessages(CHAT_THREAD_ID)).rejects.toThrow(
+        "Failed to list inbox thread emails: Thread not found"
+      );
+    });
+  });
+
+  describe("fetchMessage", () => {
+    it("fetches the email of the inbox thread", async () => {
+      const message = await adapter.fetchMessage(CHAT_THREAD_ID, EMAIL_ID);
+
+      expect(mockInboxEmailGet).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        threadId: THREAD_ID,
+        emailId: EMAIL_ID,
+      });
+      expect(message?.id).toBe(EMAIL_ID);
+      expect(message?.threadId).toBe(CHAT_THREAD_ID);
+      expect(message?.text).toBe("Could I get a refund?");
+    });
+
+    it("returns null when the email does not exist", async () => {
+      mockInboxEmailGet.mockResolvedValueOnce({
+        data: null,
+        error: { statusCode: 404, message: "Email not found" },
+      });
+
+      await expect(
+        adapter.fetchMessage(CHAT_THREAD_ID, EMAIL_ID)
+      ).resolves.toBeNull();
+    });
+
+    it("throws on another error", async () => {
+      mockInboxEmailGet.mockResolvedValueOnce({
+        data: null,
+        error: { statusCode: 500, message: "Internal error" },
+      });
+
+      await expect(
+        adapter.fetchMessage(CHAT_THREAD_ID, EMAIL_ID)
+      ).rejects.toThrow("Failed to fetch inbox email: Internal error");
+    });
+
+    it("returns null for a thread without an inbox", async () => {
+      await expect(
+        adapter.fetchMessage("resend:user@example.com:abcdef0123456789", "re_1")
+      ).resolves.toBeNull();
+      expect(mockInboxEmailGet).not.toHaveBeenCalled();
+    });
+  });
+
+  it("keeps sending openDM threads with the emails API by default", async () => {
     const threadId = await adapter.openDM("user@example.com");
 
     await adapter.postMessage(threadId, "Hello");
@@ -886,7 +1197,207 @@ describe("ResendAdapter with an inbox", () => {
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({ to: ["user@example.com"] })
     );
+    expect(mockDraftCreate).not.toHaveBeenCalled();
     expect(mockInboxEmailReply).not.toHaveBeenCalled();
+  });
+
+  it("throws when startInboxThreads is set without an inbox", () => {
+    expect(
+      () => new ResendAdapter({ ...config, startInboxThreads: true })
+    ).toThrow("startInboxThreads requires inboxId or inboxEmailAddress.");
+  });
+
+  describe("openDM with startInboxThreads", () => {
+    const RESEND_THREAD_ID = "9d2e4c1a-6b3f-4e7d-8a52-1c0f3b9e7d64";
+    const DRAFT_ID = "c3a1e8b4-2d5f-4a7c-9e10-6b8d7f5a4c32";
+    const SENT_EMAIL_ID = "2f6d9b1e-8c4a-4f3e-b7d0-5a1c9e3f6b82";
+    const NEW_THREAD_PATTERN = new RegExp(
+      `^resend:${INBOX_ID}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+    );
+
+    const draftSentPayload = {
+      type: "inbox.draft.sent",
+      created_at: "2026-08-05T15:00:01.000Z",
+      data: {
+        source: "api",
+        inbox_id: INBOX_ID,
+        thread_id: RESEND_THREAD_ID,
+        email_id: SENT_EMAIL_ID,
+        draft_id: DRAFT_ID,
+      },
+    };
+
+    async function openAndSend(): Promise<string> {
+      const threadId = await adapter.openDM("ada@example.org");
+      await adapter.postMessage(threadId, "Your order shipped.");
+      return threadId;
+    }
+
+    async function receiveDraftSent(): Promise<void> {
+      mockVerify.mockReturnValue(draftSentPayload);
+      await adapter.handleWebhook(webhookRequest(draftSentPayload));
+    }
+
+    beforeEach(async () => {
+      adapter = new ResendAdapter({
+        ...config,
+        fromAddress: "agent@example.com",
+        inboxId: INBOX_ID,
+        startInboxThreads: true,
+      });
+      await adapter.initialize(mockChat);
+      mockDraftCreate.mockResolvedValue({
+        data: { object: "inbox_draft", id: DRAFT_ID },
+        error: null,
+      });
+      mockDraftSend.mockResolvedValue({
+        data: { id: SENT_EMAIL_ID },
+        error: null,
+      });
+    });
+
+    it("starts a new inbox thread with a standalone draft", async () => {
+      const threadId = await adapter.openDM("ada@example.org");
+      expect(threadId).toMatch(NEW_THREAD_PATTERN);
+      expect(adapter.channelIdFromThreadId(threadId)).toBe(
+        `resend:${INBOX_ID}`
+      );
+
+      const result = await adapter.postMessage(threadId, "Your order shipped.");
+
+      expect(mockDraftCreate).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        to: ["ada@example.org"],
+        subject: "New message",
+        html: expect.stringContaining("Your order shipped."),
+        text: "Your order shipped.",
+      });
+      expect(mockDraftSend).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        draftId: DRAFT_ID,
+      });
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockInboxEmailReply).not.toHaveBeenCalled();
+      expect(result.id).toBe(SENT_EMAIL_ID);
+      expect(result.threadId).toBe(threadId);
+      expect(result.raw).toMatchObject({
+        inboxId: INBOX_ID,
+        to: ["ada@example.org"],
+        subject: "New message",
+      });
+    });
+
+    it("replies in the Resend thread after the inbox.draft.sent event", async () => {
+      const threadId = await openAndSend();
+      await receiveDraftSent();
+      expect(mockChat.processMessage).not.toHaveBeenCalled();
+      mockInboxEmailList.mockResolvedValue({
+        data: {
+          object: "list",
+          has_more: false,
+          data: [{ id: SENT_EMAIL_ID, direction: "outbound" }],
+        },
+        error: null,
+      });
+
+      await adapter.postMessage(threadId, "It arrives tomorrow.");
+
+      expect(mockInboxEmailList).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        threadId: RESEND_THREAD_ID,
+        limit: 100,
+      });
+      expect(mockInboxEmailReply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inboxId: INBOX_ID,
+          threadId: RESEND_THREAD_ID,
+          emailId: SENT_EMAIL_ID,
+        })
+      );
+      expect(mockDraftCreate).toHaveBeenCalledOnce();
+    });
+
+    it("processes a reply in the thread of openDM", async () => {
+      const threadId = await openAndSend();
+      await receiveDraftSent();
+      const replyPayload = {
+        ...inboxPayload,
+        data: { ...inboxPayload.data, thread_id: RESEND_THREAD_ID },
+      };
+      mockVerify.mockReturnValue(replyPayload);
+
+      await adapter.handleWebhook(webhookRequest(replyPayload));
+
+      expect(mockInboxEmailGet).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        threadId: RESEND_THREAD_ID,
+        emailId: EMAIL_ID,
+      });
+      const [, threadIdArg, messageArg] = mockChat.processMessage.mock.calls[0];
+      expect(threadIdArg).toBe(threadId);
+      expect(messageArg.raw.inboxThreadId).toBe(RESEND_THREAD_ID);
+    });
+
+    it("throws on a second post before the inbox.draft.sent event", async () => {
+      const threadId = await openAndSend();
+
+      await expect(adapter.postMessage(threadId, "Hello?")).rejects.toThrow(
+        "is not ready"
+      );
+      expect(mockDraftCreate).toHaveBeenCalledOnce();
+    });
+
+    it("fetches the Resend thread after the inbox.draft.sent event", async () => {
+      const threadId = await openAndSend();
+
+      await expect(adapter.fetchMessages(threadId)).resolves.toEqual({
+        messages: [],
+      });
+      expect(mockInboxEmailList).not.toHaveBeenCalled();
+
+      await receiveDraftSent();
+      mockInboxEmailList.mockResolvedValue({
+        data: {
+          object: "list",
+          has_more: false,
+          data: [{ ...inboxEmail, id: SENT_EMAIL_ID, direction: "outbound" }],
+        },
+        error: null,
+      });
+      const { messages } = await adapter.fetchMessages(threadId);
+
+      expect(mockInboxEmailList).toHaveBeenCalledWith(
+        expect.objectContaining({ threadId: RESEND_THREAD_ID })
+      );
+      expect(messages[0].threadId).toBe(threadId);
+      await expect(adapter.fetchThread(threadId)).resolves.toMatchObject({
+        metadata: { inboxThreadId: RESEND_THREAD_ID },
+      });
+    });
+
+    it("ignores inbox.draft.sent for another draft", async () => {
+      mockVerify.mockReturnValue(draftSentPayload);
+
+      const result = await adapter.handleWebhook(
+        webhookRequest(draftSentPayload)
+      );
+
+      expect(result.status).toBe(200);
+      expect(mockChat.processMessage).not.toHaveBeenCalled();
+    });
+
+    it("throws when the draft cannot be created", async () => {
+      mockDraftCreate.mockResolvedValue({
+        data: null,
+        error: { message: "Invalid recipient" },
+      });
+      const threadId = await adapter.openDM("ada@example.org");
+
+      await expect(adapter.postMessage(threadId, "Hello")).rejects.toThrow(
+        "Failed to create inbox draft: Invalid recipient"
+      );
+      expect(mockDraftSend).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -970,6 +1481,21 @@ describe("ResendAdapter with an inbox email address", () => {
     });
     const [, threadIdArg] = mockChat.processMessage.mock.calls[0];
     expect(threadIdArg).toBe(`resend:${INBOX_ID}:${THREAD_ID}`);
+  });
+
+  it("opens a new inbox thread on the resolved inbox", async () => {
+    const threadAdapter = new ResendAdapter({
+      ...config,
+      fromAddress: INBOX_ADDRESS,
+      inboxEmailAddress: INBOX_ADDRESS,
+      startInboxThreads: true,
+    });
+    await threadAdapter.initialize(mockChat);
+
+    const threadId = await threadAdapter.openDM("ada@example.org");
+
+    expect(mockInboxGet).toHaveBeenCalledWith(INBOX_ADDRESS);
+    expect(threadId.startsWith(`resend:${INBOX_ID}:`)).toBe(true);
   });
 
   it("gets the inbox once", async () => {

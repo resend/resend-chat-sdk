@@ -11,6 +11,7 @@ const WEBHOOK_SECRET = `whsec_${Buffer.from("thread-persistence-test-secret").to
 const RECEIVING_URL_RE = /^\/emails\/receiving\/(.+)$/;
 const INBOX_EMAIL_URL_RE =
   /^\/inboxes\/([^/]+)\/threads\/([^/]+)\/emails\/([^/]+)(\/reply)?$/;
+const INBOX_DRAFT_URL_RE = /^\/inboxes\/([^/]+)\/drafts(?:\/([^/]+)\/send)?$/;
 const INBOX_ID = "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1";
 const INBOX_THREAD_ID = "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90";
 
@@ -26,6 +27,8 @@ interface SentEmail {
 let server: Server;
 let sentEmails: SentEmail[] = [];
 let inboxReplies: { body: Record<string, unknown>; url: string }[] = [];
+let inboxDrafts: { body: Record<string, unknown>; url: string }[] = [];
+let sentDrafts: string[] = [];
 const inboundEmails = new Map<string, Record<string, unknown>>();
 let createResendAdapter: typeof import("../src/index.js")["createResendAdapter"];
 
@@ -40,6 +43,22 @@ beforeAll(async () => {
       if (req.method === "POST" && req.url === "/emails") {
         sentEmails.push(JSON.parse(body));
         res.end(JSON.stringify({ id: `re_sent_${sentEmails.length}` }));
+        return;
+      }
+      const draftMatch = req.url?.match(INBOX_DRAFT_URL_RE);
+      if (req.method === "POST" && draftMatch) {
+        if (draftMatch[2]) {
+          sentDrafts.push(draftMatch[2]);
+          res.end(JSON.stringify({ id: `sent_draft_${sentDrafts.length}` }));
+          return;
+        }
+        inboxDrafts.push({ url: req.url ?? "", body: JSON.parse(body) });
+        res.end(
+          JSON.stringify({
+            object: "inbox_draft",
+            id: `draft_${inboxDrafts.length}`,
+          })
+        );
         return;
       }
       const inboxMatch = req.url?.match(INBOX_EMAIL_URL_RE);
@@ -87,11 +106,14 @@ afterAll(() => {
 beforeEach(() => {
   sentEmails = [];
   inboxReplies = [];
+  inboxDrafts = [];
+  sentDrafts = [];
 });
 
 function createProcess(
   state: MemoryStateAdapter,
-  inboxId?: string
+  inboxId?: string,
+  startInboxThreads?: boolean
 ): {
   chat: Chat<{ resend: ResendAdapter }>;
   resend: ResendAdapter;
@@ -101,6 +123,7 @@ function createProcess(
     webhookSecret: WEBHOOK_SECRET,
     fromAddress: "bot@example.com",
     inboxId,
+    startInboxThreads,
   });
   const chat = new Chat({
     userName: "email-bot",
@@ -179,7 +202,8 @@ async function sendWebhook(
 }
 
 async function deliverInboxEmail(
-  chat: Chat<{ resend: ResendAdapter }>
+  chat: Chat<{ resend: ResendAdapter }>,
+  threadId = INBOX_THREAD_ID
 ): Promise<{ emailId: string }> {
   inboundCounter += 1;
   const emailId = `00000000-0000-4000-8000-${String(inboundCounter).padStart(12, "0")}`;
@@ -206,7 +230,7 @@ async function deliverInboxEmail(
     data: {
       source: "system",
       inbox_id: INBOX_ID,
-      thread_id: INBOX_THREAD_ID,
+      thread_id: threadId,
       email_id: emailId,
     },
   });
@@ -296,5 +320,62 @@ describe("inbox threads across processes", () => {
       `/inboxes/${INBOX_ID}/threads/${INBOX_THREAD_ID}/emails/${emailId}/reply`
     );
     expect(inboxReplies[0].body.text).toBe("It ships tomorrow.");
+  });
+
+  it("links a thread of openDM across processes with the inbox.draft.sent event", async () => {
+    const state = new MemoryStateAdapter();
+    const resendThreadId = "9d2e4c1a-6b3f-4e7d-8a52-1c0f3b9e7d64";
+
+    const outboundProcess = createProcess(state, INBOX_ID, true);
+    await outboundProcess.chat.initialize();
+    const threadId = await outboundProcess.resend.openDM(
+      "customer@example.com"
+    );
+    await state.subscribe(threadId);
+    await outboundProcess.resend.postMessage(threadId, "Your order shipped.");
+
+    expect(inboxDrafts).toHaveLength(1);
+    expect(inboxDrafts[0].url).toBe(`/inboxes/${INBOX_ID}/drafts`);
+    expect(inboxDrafts[0].body).toMatchObject({
+      to: ["customer@example.com"],
+      subject: "New message",
+      text: "Your order shipped.",
+    });
+    expect(sentDrafts).toEqual(["draft_1"]);
+
+    const eventProcess = createProcess(state, INBOX_ID, true);
+    await sendWebhook(
+      eventProcess.chat,
+      JSON.stringify({
+        type: "inbox.draft.sent",
+        created_at: "2026-08-05T15:00:01.000Z",
+        data: {
+          source: "api",
+          inbox_id: INBOX_ID,
+          thread_id: resendThreadId,
+          email_id: "sent_draft_1",
+          draft_id: "draft_1",
+        },
+      }),
+      "msg_draft_sent"
+    );
+
+    const replyProcess = createProcess(state, INBOX_ID, true);
+    let replyThreadId = "";
+    replyProcess.chat.onSubscribedMessage(async (thread, message) => {
+      replyThreadId = thread.id;
+      await thread.post(`Echo: ${message.text}`);
+    });
+    const { emailId } = await deliverInboxEmail(
+      replyProcess.chat,
+      resendThreadId
+    );
+
+    expect(replyThreadId).toBe(threadId);
+    expect(inboxReplies).toHaveLength(1);
+    expect(inboxReplies[0].url).toBe(
+      `/inboxes/${INBOX_ID}/threads/${resendThreadId}/emails/${emailId}/reply`
+    );
+    expect(inboxDrafts).toHaveLength(1);
   });
 });
