@@ -4,6 +4,7 @@ import type {
   ResendInboxWebhookPayload,
   ResendReceivedEmail,
   ResendWebhookPayload,
+  ResendWebhookVerifier,
 } from "./types.js";
 
 interface WebhookResult {
@@ -15,29 +16,19 @@ export class WebhookHandler {
   private resolvedInboxId: Promise<string> | null = null;
 
   constructor(
-    private readonly resend: Resend,
+    private readonly getResend: () => Promise<Resend>,
     private readonly webhookSecret: string,
-    private readonly inbox?: InboxSelector
+    private readonly inbox?: InboxSelector,
+    private readonly webhookVerifier?: ResendWebhookVerifier
   ) {}
 
   async parseWebhookRequest(request: Request): Promise<WebhookResult> {
     const body = await request.text();
-    const svixId = request.headers.get("svix-id") || "";
-    const svixTimestamp = request.headers.get("svix-timestamp") || "";
-    const svixSignature = request.headers.get("svix-signature") || "";
 
-    let payload: Record<string, unknown>;
-    try {
-      payload = this.resend.webhooks.verify({
-        payload: body,
-        headers: {
-          id: svixId,
-          timestamp: svixTimestamp,
-          signature: svixSignature,
-        },
-        webhookSecret: this.webhookSecret,
-      }) as unknown as Record<string, unknown>;
-    } catch {
+    const payload = this.webhookVerifier
+      ? await this.verifyWithVerifier(this.webhookVerifier, request, body)
+      : this.verifySignature(await this.getResend(), request, body);
+    if (!payload) {
       return { status: 401, event: null };
     }
 
@@ -65,6 +56,43 @@ export class WebhookHandler {
     };
   }
 
+  /** Returns the payload, or `null` when the verifier rejects the request. */
+  private async verifyWithVerifier(
+    verifier: ResendWebhookVerifier,
+    request: Request,
+    body: string
+  ): Promise<Record<string, unknown> | null> {
+    try {
+      if (!(await verifier(request, body))) {
+        return null;
+      }
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Returns the payload, or `null` when the Svix signature is not valid. */
+  private verifySignature(
+    resend: Resend,
+    request: Request,
+    body: string
+  ): Record<string, unknown> | null {
+    try {
+      return resend.webhooks.verify({
+        payload: body,
+        headers: {
+          id: request.headers.get("svix-id") || "",
+          timestamp: request.headers.get("svix-timestamp") || "",
+          signature: request.headers.get("svix-signature") || "",
+        },
+        webhookSecret: this.webhookSecret,
+      }) as unknown as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
   private getInboxId(inbox: InboxSelector): Promise<string> {
     if (inbox.inboxId !== undefined) {
       return Promise.resolve(inbox.inboxId);
@@ -81,7 +109,8 @@ export class WebhookHandler {
   }
 
   private async fetchInboxId(emailAddress: string): Promise<string> {
-    const response = await this.resend.inboxes.get(emailAddress);
+    const resend = await this.getResend();
+    const response = await resend.inboxes.get(emailAddress);
     if (response.error?.statusCode === 404) {
       throw new Error(`Inbox ${emailAddress} does not exist`);
     }
@@ -94,7 +123,8 @@ export class WebhookHandler {
   }
 
   async fetchEmailContent(emailId: string): Promise<ResendReceivedEmail> {
-    const response = await this.resend.emails.receiving.get(emailId);
+    const resend = await this.getResend();
+    const response = await resend.emails.receiving.get(emailId);
     if (response.error || !response.data) {
       throw new Error(
         `Failed to fetch email content: ${response.error?.message || "Unknown error"}`
@@ -108,7 +138,8 @@ export class WebhookHandler {
     inboxId: string;
     threadId: string;
   }): Promise<ResendInboxEmail> {
-    const response = await this.resend.inboxes.threads.emails.get(input);
+    const resend = await this.getResend();
+    const response = await resend.inboxes.threads.emails.get(input);
     if (response.error || !response.data) {
       throw new Error(
         `Failed to fetch inbox email: ${response.error?.message || "Unknown error"}`
