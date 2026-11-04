@@ -210,6 +210,24 @@ export class ThreadResolver {
     return this.getValue(`resend:inbox-chat-thread:${resendThreadId}`);
   }
 
+  // Written again on each use, so the TTL counts from the last email and not from openDM().
+  async refreshNewInboxThread(
+    threadId: string,
+    thread: NewInboxThread
+  ): Promise<void> {
+    const { draftId, resendThreadId, toAddress } = thread;
+    if (!(this.state && resendThreadId)) {
+      return;
+    }
+    await Promise.all([
+      this.setValue(`resend:new-inbox-thread-to:${threadId}`, toAddress),
+      this.setValue(`resend:new-inbox-thread-id:${threadId}`, resendThreadId),
+      this.setValue(`resend:inbox-chat-thread:${resendThreadId}`, threadId),
+      draftId &&
+        this.setValue(`resend:new-inbox-thread-draft:${threadId}`, draftId),
+    ]);
+  }
+
   async trackSubject(threadId: string, subject: string): Promise<void> {
     if (this.state) {
       await this.state.setIfNotExists(

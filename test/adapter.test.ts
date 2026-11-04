@@ -21,6 +21,7 @@ const mockInboxEmailReply = vi.fn();
 const mockInboxGet = vi.fn();
 const mockDraftCreate = vi.fn();
 const mockDraftSend = vi.fn();
+const mockDraftRemove = vi.fn();
 
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(() => ({
@@ -38,6 +39,7 @@ vi.mock("resend", () => ({
       drafts: {
         create: mockDraftCreate,
         send: mockDraftSend,
+        remove: mockDraftRemove,
       },
       threads: {
         emails: {
@@ -1397,6 +1399,30 @@ describe("ResendAdapter with an inbox", () => {
         "Failed to create inbox draft: Invalid recipient"
       );
       expect(mockDraftSend).not.toHaveBeenCalled();
+    });
+
+    it("removes the draft when it cannot be sent", async () => {
+      mockDraftSend.mockResolvedValueOnce({
+        data: null,
+        error: { message: "Domain not verified" },
+      });
+      mockDraftRemove.mockResolvedValue({
+        data: { object: "inbox_draft", id: DRAFT_ID, deleted: true },
+        error: null,
+      });
+      const threadId = await adapter.openDM("ada@example.org");
+
+      await expect(adapter.postMessage(threadId, "Hello")).rejects.toThrow(
+        "Failed to send inbox draft: Domain not verified"
+      );
+      expect(mockDraftRemove).toHaveBeenCalledWith({
+        inboxId: INBOX_ID,
+        draftId: DRAFT_ID,
+      });
+
+      await adapter.postMessage(threadId, "Hello");
+      expect(mockDraftCreate).toHaveBeenCalledTimes(2);
+      expect(mockDraftSend).toHaveBeenCalledTimes(2);
     });
   });
 });

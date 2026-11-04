@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { MemoryStateAdapter } from "@chat-adapter/state-memory";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThreadResolver } from "../src/thread-resolver.js";
 import type { ResendThreadId } from "../src/types.js";
 
@@ -261,6 +262,63 @@ describe("ThreadResolver", () => {
       expect(
         await resolver.getSubject("resend:bot@example.com:unknown")
       ).toBeUndefined();
+    });
+  });
+
+  describe("new inbox thread links", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const threadId = "resend:b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1:placeholder";
+    const resendThreadId = "9d2e4c1a-6b3f-4e7d-8a52-1c0f3b9e7d64";
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function linkedResolver(): Promise<ThreadResolver> {
+      const state = new MemoryStateAdapter();
+      await state.connect();
+      const linked = new ThreadResolver();
+      linked.state = state;
+      await linked.trackNewInboxThread(threadId, "ada@example.org");
+      await linked.trackInboxDraft("draft_1", threadId);
+      await linked.markNewInboxThreadSent(threadId, "draft_1");
+      await linked.linkInboxDraft("draft_1", resendThreadId);
+      return linked;
+    }
+
+    it("keeps the link for 30 days after the last use", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const linked = await linkedResolver();
+
+      vi.setSystemTime(Date.now() + 20 * DAY_MS);
+      const thread = await linked.getNewInboxThread(threadId);
+      expect(thread).toBeDefined();
+      await linked.refreshNewInboxThread(
+        threadId,
+        thread as NonNullable<typeof thread>
+      );
+      vi.setSystemTime(Date.now() + 20 * DAY_MS);
+
+      await expect(linked.getNewInboxThread(threadId)).resolves.toEqual({
+        toAddress: "ada@example.org",
+        draftId: "draft_1",
+        resendThreadId,
+      });
+      await expect(linked.getChatThreadId(resendThreadId)).resolves.toBe(
+        threadId
+      );
+    });
+
+    it("drops the link 30 days after the last use", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const linked = await linkedResolver();
+
+      vi.setSystemTime(Date.now() + 31 * DAY_MS);
+
+      await expect(linked.getNewInboxThread(threadId)).resolves.toBeUndefined();
+      await expect(
+        linked.getChatThreadId(resendThreadId)
+      ).resolves.toBeUndefined();
     });
   });
 });

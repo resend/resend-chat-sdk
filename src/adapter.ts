@@ -204,9 +204,20 @@ export class ResendAdapter
     });
 
     // A thread that openDM() opened keeps the chat thread ID of openDM().
-    const threadId =
-      (await this.threadResolver.getChatThreadId(thread.threadId)) ??
-      this.threadResolver.encodeThreadId(thread);
+    const chatThreadId = await this.threadResolver.getChatThreadId(
+      thread.threadId
+    );
+    if (chatThreadId) {
+      const newThread =
+        await this.threadResolver.getNewInboxThread(chatThreadId);
+      if (newThread) {
+        await this.threadResolver.refreshNewInboxThread(
+          chatThreadId,
+          newThread
+        );
+      }
+    }
+    const threadId = chatThreadId ?? this.threadResolver.encodeThreadId(thread);
     await this.threadResolver.trackInboxEmail(threadId, email.id);
     if (email.subject) {
       await this.threadResolver.trackSubject(threadId, email.subject);
@@ -382,6 +393,9 @@ export class ResendAdapter
     const thread = newThread?.resendThreadId
       ? { inboxId: chatThread.inboxId, threadId: newThread.resendThreadId }
       : chatThread;
+    if (newThread) {
+      await this.threadResolver.refreshNewInboxThread(threadId, newThread);
+    }
 
     const resend = await this.getResend();
     const emailId =
@@ -462,6 +476,9 @@ export class ResendAdapter
       draftId: draft.data.id,
     });
     if (sent.error || !sent.data) {
+      await resend.inboxes.drafts
+        .remove({ inboxId, draftId: draft.data.id })
+        .catch(() => undefined);
       throw new Error(
         `Failed to send inbox draft: ${sent.error?.message || "Unknown error"}`
       );
