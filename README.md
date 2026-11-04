@@ -163,6 +163,30 @@ const resend = createResendAdapter({
 
 The verifier receives the `Request` and the raw body text. Return a truthy value to accept the webhook. Return a falsy value or throw to reject it, and the adapter responds with `401`. The verifier replaces the Svix check, including its timestamp check, so it must reject replayed requests itself.
 
+### API Key Function
+
+Set `apiKey` to a function to get the key when the adapter needs it. The adapter calls the function each time it calls the Resend API, so a rotated or short-lived key takes effect without a new adapter.
+
+```ts
+const resend = createResendAdapter({
+  fromAddress: "bot@yourdomain.com",
+  apiKey: () => getResendApiKey(),
+});
+```
+
+### Custom Webhook Verification
+
+By default, the adapter verifies the Svix signature of each webhook with `webhookSecret`. Set `webhookVerifier` when a trusted proxy verifies the Resend signature and forwards the webhook with its own credential. The adapter then calls the verifier in place of the signature check, and ignores `webhookSecret` and `RESEND_WEBHOOK_SECRET`.
+
+```ts
+const resend = createResendAdapter({
+  fromAddress: "bot@yourdomain.com",
+  webhookVerifier: (request, body) => verifyProxyToken(request),
+});
+```
+
+The verifier receives the `Request` and the raw body text. Return a truthy value to accept the webhook. Return a falsy value or throw to reject it, and the adapter responds with `401`. The verifier replaces the Svix check, including its timestamp check, so it must reject replayed requests itself.
+
 ### Email Threading
 
 Without an inbox, threads are resolved using standard `Message-ID`, `In-Reply-To`, and `References` email headers. Reply chains are automatically grouped into Chat SDK threads.
