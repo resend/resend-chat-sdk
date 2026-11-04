@@ -89,6 +89,13 @@ interface ResendAdapterBaseConfig {
   fromAddress: string;
   /** Display name for the From header (optional). */
   fromName?: string;
+  /**
+   * Start a new inbox thread from `openDM()`, with a standalone draft. Requires
+   * `inboxId` or `inboxEmailAddress`. Subscribe your webhook to `inbox.draft.sent`
+   * and use a persistent state adapter. Defaults to `false`, and `openDM()` sends
+   * with `resend.emails.send()`.
+   */
+  startInboxThreads?: boolean;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
   /**
@@ -163,6 +170,18 @@ export interface ResendInboxWebhookPayload {
     };
   };
   type: "inbox.email.received";
+}
+
+export interface ResendInboxDraftSentPayload {
+  created_at: string;
+  data: {
+    source: "api" | "dashboard" | "agent" | "system";
+    inbox_id: string;
+    thread_id: string;
+    email_id: string;
+    draft_id: string;
+  };
+  type: "inbox.draft.sent";
 }
 
 export interface ResendInboxEmail {

@@ -7,6 +7,7 @@ export type {
   ResendApiKey,
   ResendAttachment,
   ResendInboxConfig,
+  ResendInboxDraftSentPayload,
   ResendInboxEmail,
   ResendInboxThreadId,
   ResendInboxWebhookPayload,

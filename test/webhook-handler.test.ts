@@ -277,6 +277,23 @@ describe("WebhookHandler", () => {
       expect(result.event).toBeNull();
     });
 
+    it("returns the event for inbox.draft.sent on the inbox", async () => {
+      const payload = {
+        type: "inbox.draft.sent",
+        created_at: "2026-09-29T12:00:01.000Z",
+        data: {
+          ...inboxPayload.data,
+          draft_id: "c3a1e8b4-2d5f-4a7c-9e10-6b8d7f5a4c32",
+        },
+      };
+      mockVerify.mockReturnValue(payload);
+
+      const result = await inboxHandler.parseWebhookRequest(
+        signedRequest(payload)
+      );
+      expect(result.event).toEqual(payload);
+    });
+
     it("ignores email.received", async () => {
       const payload = { type: "email.received", data: { email_id: "re_1" } };
       mockVerify.mockReturnValue(payload);

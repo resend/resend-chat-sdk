@@ -1,5 +1,6 @@
 import type { InboxSelector, Resend } from "resend";
 import type {
+  ResendInboxDraftSentPayload,
   ResendInboxEmail,
   ResendInboxWebhookPayload,
   ResendReceivedEmail,
@@ -8,7 +9,11 @@ import type {
 } from "./types.js";
 
 interface WebhookResult {
-  event: ResendWebhookPayload | ResendInboxWebhookPayload | null;
+  event:
+    | ResendWebhookPayload
+    | ResendInboxWebhookPayload
+    | ResendInboxDraftSentPayload
+    | null;
   status: number;
 }
 
@@ -33,7 +38,10 @@ export class WebhookHandler {
     }
 
     if (this.inbox) {
-      if (payload.type !== "inbox.email.received") {
+      if (
+        payload.type !== "inbox.email.received" &&
+        payload.type !== "inbox.draft.sent"
+      ) {
         return { status: 200, event: null };
       }
       const data = payload.data as { inbox_id?: string } | undefined;
@@ -42,7 +50,9 @@ export class WebhookHandler {
       }
       return {
         status: 200,
-        event: payload as unknown as ResendInboxWebhookPayload,
+        event: payload as unknown as
+          | ResendInboxWebhookPayload
+          | ResendInboxDraftSentPayload,
       };
     }
 
@@ -93,7 +103,7 @@ export class WebhookHandler {
     }
   }
 
-  private getInboxId(inbox: InboxSelector): Promise<string> {
+  getInboxId(inbox: InboxSelector): Promise<string> {
     if (inbox.inboxId !== undefined) {
       return Promise.resolve(inbox.inboxId);
     }
