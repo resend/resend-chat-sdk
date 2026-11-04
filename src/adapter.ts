@@ -16,6 +16,7 @@ import { renderMessage } from "./message-renderer.js";
 import { ThreadResolver } from "./thread-resolver.js";
 import type {
   ResendAdapterConfig,
+  ResendApiKey,
   ResendInboxThreadId,
   ResendInboxWebhookPayload,
   ResendRawMessage,
@@ -54,6 +55,7 @@ export class ResendAdapter
 
   private readonly config: ResendAdapterConfig;
   private resend: Resend | null = null;
+  private resendApiKey: string | null = null;
   private chat: ChatInstance | null = null;
   private readonly threadResolver = new ThreadResolver();
   private readonly formatConverter = new ResendFormatConverter();
@@ -67,31 +69,46 @@ export class ResendAdapter
     this.userName = config.fromAddress;
   }
 
-  /** Lazily create the Resend client so both initialize() and direct usage work. */
-  private getResend(): Resend {
-    if (!this.resend) {
-      const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var."
-        );
-      }
+  private getApiKey(): ResendApiKey {
+    const apiKey = this.config.apiKey || process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Resend API key is required. Provide it via config.apiKey or RESEND_API_KEY env var."
+      );
+    }
+    return apiKey;
+  }
+
+  /**
+   * Lazily create the Resend client so both initialize() and direct usage work.
+   * A function `apiKey` is called on each use, and the client is created again
+   * when the key changes.
+   */
+  private async getResend(): Promise<Resend> {
+    const source = this.getApiKey();
+    const apiKey = typeof source === "function" ? await source() : source;
+    if (!apiKey) {
+      throw new Error("config.apiKey returned an empty Resend API key.");
+    }
+    if (!this.resend || this.resendApiKey !== apiKey) {
       this.resend = new Resend(apiKey);
+      this.resendApiKey = apiKey;
     }
     return this.resend;
   }
 
   initialize(chat: ChatInstance): Promise<void> {
-    this.getResend();
+    this.getApiKey();
     this.chat = chat;
     this.threadResolver.state = chat.getState?.() ?? null;
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET || "";
     this.webhookHandler = new WebhookHandler(
-      this.getResend(),
+      () => this.getResend(),
       webhookSecret,
-      this.inboxSelector()
+      this.inboxSelector(),
+      this.config.webhookVerifier
     );
     return Promise.resolve();
   }
@@ -132,9 +149,9 @@ export class ResendAdapter
 
     const webhookSecret =
       this.config.webhookSecret || process.env.RESEND_WEBHOOK_SECRET;
-    if (!webhookSecret) {
+    if (!(webhookSecret || this.config.webhookVerifier)) {
       throw new Error(
-        "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env)"
+        "Webhook secret is required for webhook verification (config.webhookSecret or RESEND_WEBHOOK_SECRET env), unless config.webhookVerifier is set"
       );
     }
 
@@ -233,7 +250,7 @@ export class ResendAdapter
     threadId: string,
     message: AdapterPostableMessage
   ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
-    const resend = this.getResend();
+    const resend = await this.getResend();
 
     // Normalize AdapterPostableMessage to { text?, formatted?, card? }
     let normalized: { text?: string; formatted?: Root; card?: CardNode };
@@ -319,7 +336,7 @@ export class ResendAdapter
     thread: ResendInboxThreadId,
     rendered: { html: string; text: string }
   ): Promise<{ id: string; raw: ResendRawMessage; threadId: string }> {
-    const resend = this.getResend();
+    const resend = await this.getResend();
     const emailId =
       (await this.threadResolver.getInboxEmail(threadId)) ??
       (await this.findLatestInboxEmail(thread));
@@ -361,7 +378,7 @@ export class ResendAdapter
   private async findLatestInboxEmail(
     thread: ResendInboxThreadId
   ): Promise<string> {
-    const resend = this.getResend();
+    const resend = await this.getResend();
     let after: string | undefined;
     let latestInbound: string | undefined;
     let latest: string | undefined;

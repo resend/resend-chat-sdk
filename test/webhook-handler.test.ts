@@ -16,6 +16,8 @@ const mockResend = {
   },
 };
 
+const getResend = () => Promise.resolve(mockResend as any);
+
 const INBOX_ID = "b3e2b2b6-3f0e-4c8e-9ad3-2f43a1e2c7f1";
 const THREAD_ID = "7c1f0a2e-5d3b-4e8a-9f61-2b8d4c6e1a90";
 const EMAIL_ID = "4ef9a417-02e9-4d39-ad75-9611e0fcc33c";
@@ -49,7 +51,7 @@ describe("WebhookHandler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    handler = new WebhookHandler(mockResend as any, "whsec_test123");
+    handler = new WebhookHandler(getResend, "whsec_test123");
   });
 
   describe("parseWebhookRequest", () => {
@@ -121,6 +123,85 @@ describe("WebhookHandler", () => {
     });
   });
 
+  it("throws when the client cannot be created, instead of returning 401", async () => {
+    const failingHandler = new WebhookHandler(
+      () => Promise.reject(new Error("No API key")),
+      "whsec_test123"
+    );
+
+    await expect(
+      failingHandler.parseWebhookRequest(signedRequest({ type: "email.sent" }))
+    ).rejects.toThrow("No API key");
+  });
+
+  describe("with a webhook verifier", () => {
+    const payload = {
+      type: "email.received",
+      created_at: "2025-01-01T00:00:00Z",
+      data: {
+        email_id: "re_123",
+        from: "user@example.com",
+        to: ["bot@example.com"],
+        subject: "Test",
+        message_id: "<test@mail.resend.dev>",
+      },
+    };
+
+    function forwardedRequest(): Request {
+      return new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: { authorization: "Bearer forwarded" },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    it("uses the verifier in place of the signature check", async () => {
+      const webhookVerifier = vi.fn().mockResolvedValue(true);
+      const verifierHandler = new WebhookHandler(
+        getResend,
+        "",
+        undefined,
+        webhookVerifier
+      );
+      const request = forwardedRequest();
+
+      const result = await verifierHandler.parseWebhookRequest(request);
+
+      expect(result.status).toBe(200);
+      expect(result.event?.data.email_id).toBe("re_123");
+      expect(webhookVerifier).toHaveBeenCalledWith(
+        request,
+        JSON.stringify(payload)
+      );
+      expect(mockVerify).not.toHaveBeenCalled();
+    });
+
+    it("returns 401 when the verifier returns a falsy value", async () => {
+      const verifierHandler = new WebhookHandler(
+        getResend,
+        "",
+        undefined,
+        () => false
+      );
+
+      const result = await verifierHandler.parseWebhookRequest(
+        forwardedRequest()
+      );
+      expect(result).toEqual({ status: 401, event: null });
+    });
+
+    it("returns 401 when the verifier throws", async () => {
+      const verifierHandler = new WebhookHandler(getResend, "", undefined, () =>
+        Promise.reject(new Error("Invalid token"))
+      );
+
+      const result = await verifierHandler.parseWebhookRequest(
+        forwardedRequest()
+      );
+      expect(result).toEqual({ status: 401, event: null });
+    });
+  });
+
   describe("fetchEmailContent", () => {
     it("fetches full email via receiving API", async () => {
       const email = {
@@ -164,7 +245,7 @@ describe("WebhookHandler", () => {
     let inboxHandler: WebhookHandler;
 
     beforeEach(() => {
-      inboxHandler = new WebhookHandler(mockResend as any, "whsec_test123", {
+      inboxHandler = new WebhookHandler(getResend, "whsec_test123", {
         inboxId: INBOX_ID,
       });
     });
@@ -227,7 +308,7 @@ describe("WebhookHandler", () => {
         data: { object: "inbox", id: INBOX_ID, email_address: INBOX_ADDRESS },
         error: null,
       });
-      inboxHandler = new WebhookHandler(mockResend as any, "whsec_test123", {
+      inboxHandler = new WebhookHandler(getResend, "whsec_test123", {
         emailAddress: INBOX_ADDRESS,
       });
     });

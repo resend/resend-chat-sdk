@@ -65,15 +65,39 @@ export interface ResendAttachment {
   url?: string;
 }
 
+/**
+ * Resend API key, or a function that returns one. The adapter calls the
+ * function each time it calls the Resend API, so a rotated key takes effect
+ * without a new adapter.
+ */
+export type ResendApiKey = string | (() => string | Promise<string>);
+
+/**
+ * Custom webhook verifier. Receives the incoming `Request` and the raw body
+ * text that the adapter already read. Return a truthy value to accept the
+ * request. Return a falsy value or throw to reject it with `401`.
+ */
+export type ResendWebhookVerifier = (
+  request: Request,
+  body: string
+) => unknown | Promise<unknown>;
+
 interface ResendAdapterBaseConfig {
-  /** Resend API key. Falls back to RESEND_API_KEY env var. */
-  apiKey?: string;
+  /** Resend API key, or a function that returns one. Falls back to RESEND_API_KEY env var. */
+  apiKey?: ResendApiKey;
   /** Sender email address (required). */
   fromAddress: string;
   /** Display name for the From header (optional). */
   fromName?: string;
   /** Resend webhook signing secret. Falls back to RESEND_WEBHOOK_SECRET env var. */
   webhookSecret?: string;
+  /**
+   * Custom webhook verifier, used in place of the Svix signature check. When
+   * set, `webhookSecret` and RESEND_WEBHOOK_SECRET are ignored. Use it when a
+   * trusted proxy verifies the Resend signature and forwards the webhook with
+   * its own credential.
+   */
+  webhookVerifier?: ResendWebhookVerifier;
 }
 
 /** Selects the Resend inbox. Set `inboxId` or `inboxEmailAddress`, not both. */

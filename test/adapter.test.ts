@@ -1,4 +1,5 @@
 import { type StateAdapter, ThreadImpl } from "chat";
+import { Resend } from "resend";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendAdapter } from "../src/adapter.js";
 import { createResendAdapter } from "../src/index.js";
@@ -119,6 +120,51 @@ describe("ResendAdapter", () => {
       if (env) {
         process.env.RESEND_API_KEY = env;
       }
+    });
+
+    it("does not call an apiKey function", async () => {
+      const apiKey = vi.fn().mockResolvedValue("re_lazy");
+      const lazyAdapter = new ResendAdapter({ ...config, apiKey });
+
+      await lazyAdapter.initialize({ processMessage: vi.fn() });
+      expect(apiKey).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("apiKey function", () => {
+    it("resolves the key on each call and creates a client when it changes", async () => {
+      const apiKey = vi
+        .fn()
+        .mockResolvedValueOnce("re_first")
+        .mockResolvedValueOnce("re_first")
+        .mockResolvedValueOnce("re_rotated");
+      const lazyAdapter = new ResendAdapter({ ...config, apiKey });
+      await lazyAdapter.initialize({ processMessage: vi.fn() });
+      const threadId = "resend:user@example.com:abcdef0123456789";
+
+      await lazyAdapter.postMessage(threadId, { text: "One" });
+      await lazyAdapter.postMessage(threadId, { text: "Two" });
+      await lazyAdapter.postMessage(threadId, { text: "Three" });
+
+      expect(apiKey).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(Resend).mock.calls).toEqual([
+        ["re_first"],
+        ["re_rotated"],
+      ]);
+      expect(mockSend).toHaveBeenCalledTimes(3);
+    });
+
+    it("throws when the function returns an empty key", async () => {
+      const lazyAdapter = new ResendAdapter({
+        ...config,
+        apiKey: () => "",
+      });
+
+      await expect(
+        lazyAdapter.postMessage("resend:user@example.com:abcdef0123456789", {
+          text: "Hello",
+        })
+      ).rejects.toThrow("empty Resend API key");
     });
   });
 
@@ -556,6 +602,67 @@ describe("ResendAdapter", () => {
 
       await expect(noSecretAdapter.handleWebhook(request)).rejects.toThrow(
         "Webhook secret is required"
+      );
+
+      if (env) {
+        process.env.RESEND_WEBHOOK_SECRET = env;
+      }
+    });
+
+    it("uses webhookVerifier without a webhook secret", async () => {
+      const webhookVerifier = vi.fn().mockResolvedValue(true);
+      const verifierAdapter = new ResendAdapter({
+        ...config,
+        webhookSecret: undefined,
+        webhookVerifier,
+      });
+      const env = process.env.RESEND_WEBHOOK_SECRET;
+      process.env.RESEND_WEBHOOK_SECRET = "";
+
+      const mockChat = { processMessage: vi.fn() };
+      await verifierAdapter.initialize(mockChat);
+
+      const webhookPayload = {
+        type: "email.received",
+        created_at: "2025-01-15T10:30:00Z",
+        data: {
+          email_id: "re_forwarded_123",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Forwarded webhook email",
+          message_id: "<forwarded-msg-1@mail.resend.dev>",
+        },
+      };
+      mockReceivingGet.mockResolvedValue({
+        data: {
+          id: "re_forwarded_123",
+          from: "sender@example.com",
+          to: ["bot@example.com"],
+          subject: "Forwarded webhook email",
+          message_id: "<forwarded-msg-1@mail.resend.dev>",
+          text: "Hello from a proxy!",
+          headers: {},
+          created_at: "2025-01-15T10:30:00Z",
+        },
+      });
+
+      const request = new Request("https://example.com/webhook", {
+        method: "POST",
+        headers: { authorization: "Bearer forwarded" },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      const result = await verifierAdapter.handleWebhook(request);
+
+      expect(result.status).toBe(200);
+      expect(webhookVerifier).toHaveBeenCalledWith(
+        request,
+        JSON.stringify(webhookPayload)
+      );
+      expect(mockVerify).not.toHaveBeenCalled();
+      expect(mockChat.processMessage).toHaveBeenCalledOnce();
+      expect(mockChat.processMessage.mock.calls[0][2].text).toBe(
+        "Hello from a proxy!"
       );
 
       if (env) {
