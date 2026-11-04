@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 9816e88: Fetch the emails of an inbox thread with `fetchMessages()`, and one email with `fetchMessage()`. An outbound inbox email has `author.isMe` and `author.isBot` set, and is not a mention. Add the `startInboxThreads` option, to start a new inbox thread from `openDM()` with a standalone draft. It needs a webhook subscription to `inbox.draft.sent` and a persistent state adapter. Without it, `openDM()` sends with `resend.emails.send()` as before.
+- 6943393: Accept a function for `apiKey`, called each time the adapter calls the Resend API. Add the `webhookVerifier` option, to verify webhooks in place of the Svix signature check, for example when a trusted proxy forwards them.
+
 ## 0.5.0
 
 ### Minor Changes
