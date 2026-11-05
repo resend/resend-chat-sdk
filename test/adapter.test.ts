@@ -254,6 +254,24 @@ describe("ResendAdapter", () => {
       );
     });
 
+    it("does not add a second Re: prefix to a reply subject", async () => {
+      const mockChat = { processMessage: vi.fn() };
+      await adapter.initialize(mockChat);
+
+      // Simulate tracking the subject of a reply from the user
+      (adapter as any).threadResolver.trackSubject(
+        "resend:user@example.com:abcdef0123456789",
+        "RE: Original Subject"
+      );
+
+      await adapter.postMessage("resend:user@example.com:abcdef0123456789", {
+        text: "Hello",
+      });
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: "RE: Original Subject" })
+      );
+    });
+
     it("sends email with markdown message", async () => {
       const mockChat = { processMessage: vi.fn() };
       await adapter.initialize(mockChat);
