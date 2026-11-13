@@ -340,7 +340,7 @@ export class ResendAdapter
     const headers = await this.threadResolver.getReplyHeaders(threadId);
 
     const storedSubject = await this.threadResolver.getSubject(threadId);
-    const subject = storedSubject ? `Re: ${storedSubject}` : "New message";
+    const subject = replySubject(storedSubject) || "New message";
 
     const response = await resend.emails.send({
       from: fromHeader,
