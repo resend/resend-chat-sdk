@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+### Patch Changes
+
+- 8d4f230: Keep the subject of a reply as is when it already starts with `Re:`. Before, a reply to a reply had the subject `Re: Re: ...`.
+
 ## 0.6.0
 
 ### Minor Changes
