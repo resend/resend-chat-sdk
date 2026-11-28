@@ -27,6 +27,17 @@ describe("renderMessage", () => {
     expect(result.text).toBeTruthy();
   });
 
+  it("does not leave HTML entities in the text of formatted content", async () => {
+    const value = "Q&A: 1 < 2 &#x3C; https://example.com/?a=1&b=2";
+    const result = await renderMessage({
+      formatted: {
+        type: "root",
+        children: [{ type: "paragraph", children: [{ type: "text", value }] }],
+      },
+    });
+    expect(result.text).toBe(value);
+  });
+
   it("renders card content to email HTML", async () => {
     const result = await renderMessage({
       card: {
