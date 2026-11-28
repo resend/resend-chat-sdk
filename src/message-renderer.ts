@@ -17,6 +17,9 @@ interface RenderOutput {
 
 const converter = new ResendFormatConverter();
 
+// hast-util-to-html writes "&" and "<" in text nodes as these references
+const TEXT_ESCAPE_RE = /&#x(26|3C);/g;
+
 export async function renderMessage(input: RenderInput): Promise<RenderOutput> {
   if (input.card) {
     const html = await renderCard(input.card);
@@ -26,7 +29,7 @@ export async function renderMessage(input: RenderInput): Promise<RenderOutput> {
 
   if (input.formatted) {
     const html = converter.fromAst(input.formatted);
-    const text = input.text || stripHtml(html);
+    const text = input.text || unescapeText(stripHtml(html));
     return { html, text };
   }
 
@@ -64,6 +67,12 @@ function extractTextFromCard(card: CardNode): string {
   }
 
   return parts.join("\n");
+}
+
+function unescapeText(text: string): string {
+  return text.replace(TEXT_ESCAPE_RE, (_, hex) =>
+    String.fromCharCode(Number.parseInt(hex, 16))
+  );
 }
 
 function escapeHtml(text: string): string {
